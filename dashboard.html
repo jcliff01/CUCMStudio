@@ -1,0 +1,2299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CubeScope</title>
+<!--STATIC-->
+<style>
+/* No web fonts and no CDN: the page is served by the tool itself and must work on a server with no
+   internet route. Everything below ships in the exe. */
+:root{
+  --ink:#0f1720; --ink2:#43555f; --ink3:#6d8290;
+  --paper:#e9edf0; --surf:#fff; --surf2:#f3f6f8; --surf3:#e6ebee;
+  --line:#cfd8dd; --line2:#aebac2;
+  --accent:#0d6377; --accent2:#e2eef1;
+  --ok:#2c6e4e; --okbg:#e2efe7; --warn:#8a6310; --warnbg:#f7eeda; --crit:#9c3423; --critbg:#f8e6e2;
+  /* categorical slots in fixed order (reference palette); a series keeps its slot whatever is shown */
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  --other:#9aa6ad; --ref:#43555f;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"Liberation Mono",monospace;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ink:#e3eaf0; --ink2:#a4b6c2; --ink3:#78909e;
+    --paper:#0b1218; --surf:#141c23; --surf2:#19232b; --surf3:#223039;
+    --line:#28353e; --line2:#3d4f5b; --accent:#5db4c9; --accent2:#132730;
+    --ok:#74c19c; --okbg:#13251c; --warn:#d6a850; --warnbg:#282013; --crit:#e08874; --critbg:#2b1a16;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+    --other:#5d6b74; --ref:#a4b6c2;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e3eaf0; --ink2:#a4b6c2; --ink3:#78909e;
+  --paper:#0b1218; --surf:#141c23; --surf2:#19232b; --surf3:#223039;
+  --line:#28353e; --line2:#3d4f5b; --accent:#5db4c9; --accent2:#132730;
+  --ok:#74c19c; --okbg:#13251c; --warn:#d6a850; --warnbg:#282013; --crit:#e08874; --critbg:#2b1a16;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  --other:#5d6b74; --ref:#a4b6c2;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.45}
+.wrap{max-width:1560px;margin:0 auto;padding:0 16px 40px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;padding:12px 0 10px;border-bottom:2px solid var(--ink);margin-bottom:12px}
+h1{font-size:16px;font-weight:650;margin:0;letter-spacing:-.01em}
+h1 span{color:var(--accent)}
+.meta{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+.spacer{flex:1}
+button,select,input[type=text],input[type=datetime-local]{font:inherit;font-size:12px;background:var(--surf);color:var(--ink);
+  border:1px solid var(--line2);border-radius:3px;padding:3px 8px}
+button,select{cursor:pointer}
+button:hover,select:hover{background:var(--surf2)}
+button:focus-visible,select:focus-visible,input:focus-visible,tr:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.on{background:var(--accent);border-color:var(--accent);color:var(--paper)}
+button:disabled{opacity:.5;cursor:default}
+a{color:var(--accent)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:5px}
+.dot.stale{background:var(--warn)} .dot.off{background:var(--line2)}
+
+/* control bar: stays on screen while the charts below are read */
+.bar{position:sticky;top:0;z-index:40;background:var(--surf);border:1px solid var(--line);border-radius:3px;
+  padding:7px 10px;margin-bottom:12px;box-shadow:0 3px 10px rgba(0,0,0,.10);display:flex;flex-direction:column;gap:6px}
+.bar .row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+.bar label{color:var(--ink3);font-size:11px;white-space:nowrap}
+.bar .grp{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.bar .sep{width:1px;height:20px;background:var(--line)}
+.bar .grp[hidden]{display:none}
+/* on a phone the bar would cover a third of the screen: let it scroll away */
+@media (max-width:700px){.bar{position:static;box-shadow:none}}
+#filter{flex:1 1 280px;min-width:180px;font-family:var(--mono)}
+#recentF{max-width:220px;font-family:var(--mono)}
+#filter.bad{border-color:var(--crit);background:var(--critbg)}
+.ferr{color:var(--crit);font-size:11px;font-family:var(--mono)}
+#findRow select{max-width:240px}
+#findRow select.set{border-color:var(--accent);background:var(--accent2)}
+.crumbs{font-size:11px;color:var(--ink2);font-family:var(--mono)}
+.busy{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2)}
+.busy[hidden]{display:none}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--line2);border-top-color:var(--accent);animation:rot .8s linear infinite;flex:none}
+@keyframes rot{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
+body.loading .dim{opacity:.5;transition:opacity .2s}
+
+/* tiles */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:3px;overflow:hidden;margin-bottom:12px}
+.tile{background:var(--surf);padding:8px 11px 9px}
+.tile.click{cursor:pointer}
+.tile.click:hover{background:var(--surf2)}
+.tile.on{background:var(--accent2);box-shadow:inset 0 -3px 0 var(--accent)}
+.tile .k{font-size:10px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3)}
+.tile .v{font-family:var(--mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:3px}
+.tile .s{font-size:11px;color:var(--ink3);margin-top:2px}
+.v .st{font-size:12px;margin-right:4px}
+.v.warn{color:var(--warn)} .v.crit{color:var(--crit)}
+
+/* panels and charts */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.grid2>.wide{grid-column:1/-1}.csplit{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}.csplit{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surf);border:1px solid var(--line);border-radius:3px;padding:10px 12px 8px;min-width:0}
+.panel.full{margin-bottom:12px}
+.panel h2{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin:0 0 2px}
+.panel .sub{font-size:11px;color:var(--ink3);margin-bottom:4px;font-family:var(--mono)}
+.legend{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:11px;color:var(--ink2);margin:3px 0 5px}
+.legend span{cursor:pointer;user-select:none;white-space:nowrap}
+.legend span.off{opacity:.4;text-decoration:line-through}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.legend i.line{height:3px;border-radius:1px;vertical-align:2px}
+.legend i.dash{height:0;border-top:2px dashed;background:none!important;vertical-align:2px}
+.cwrap{position:relative}
+canvas{display:block;width:100%}
+.cwrap canvas{cursor:crosshair}
+.xh{position:absolute;top:8px;width:1px;background:var(--ink3);pointer-events:none;display:none}
+.brush{position:absolute;top:8px;background:var(--accent);opacity:.18;pointer-events:none;display:none}
+
+/* tables */
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th{background:var(--surf2);text-align:right;padding:5px 7px;font-size:10px;font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink3);border-bottom:1px solid var(--line2);white-space:nowrap}
+th.l,td.l{text-align:left}
+th.sort{cursor:pointer} th.sort:hover{color:var(--ink)}
+th .arr{color:var(--accent)}
+td{padding:4px 7px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--mono);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+td.l{font-family:var(--sans)}
+tfoot td{border-top:1px solid var(--line2);border-bottom:0;font-weight:600}
+.cstrip{display:flex;align-items:flex-end;height:66px;gap:0;border-bottom:1px solid var(--line2);margin-top:2px}.cstrip i{flex:1 1 0;min-width:0;display:flex;flex-direction:column-reverse;height:100%;justify-content:flex-start}.cstrip i[data-cw]{cursor:pointer}.cstrip i[data-cw]:hover{background:var(--surf3)}.cstrip b{display:block;margin:0 .5px}.caxis{position:relative;height:14px;font-size:10px;color:var(--ink3);margin-bottom:6px}.caxis span{position:absolute;transform:translateX(-50%);top:1px;white-space:nowrap}.ckey{display:flex;gap:12px;font-size:11px;color:var(--ink2);margin:3px 0 2px}.ckey i{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:-1px}tr.csum td{color:var(--ink2);border-bottom:1px solid var(--line2)}.cnum{cursor:pointer}.cnum:hover,.cnum:focus-visible{color:var(--accent)}
+td .pc{color:var(--ink3);font-weight:400;margin-left:4px}
+td.num{font-family:var(--mono)}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover{background:var(--surf2)}
+.nb{color:var(--accent);cursor:pointer;border-bottom:1px dotted var(--accent)}
+.nb:hover{background:var(--accent2)}
+.pill{display:inline-block;padding:0 6px;border-radius:9px;font-size:10px;font-weight:600;font-family:var(--sans);
+  letter-spacing:.02em;white-space:nowrap;border:1px solid transparent}
+.r-answered{background:var(--okbg);color:var(--ok)}
+.r-abandoned,.r-noanswer,.r-busy{background:var(--warnbg);color:var(--warn)}
+.r-rejected,.r-failed{background:var(--critbg);color:var(--crit)}
+.r-unknown{background:var(--surf3);color:var(--ink2)}
+.m-none,.m-oneway{color:var(--crit);font-weight:600}
+.m-lowrate{color:var(--warn)}
+.fd{display:inline-block;font-family:var(--sans);font-size:10px;line-height:14px;padding:0 4px;margin-right:3px;border:1px solid var(--line2);border-radius:3px;color:var(--ink2)}
+.fd.off{opacity:.35;border-style:dashed}
+.samebar{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
+#stDet .stabout td{white-space:normal;word-break:break-word}
+#stDet .stabout td:first-child{white-space:nowrap;color:var(--ink2)}
+.muted{color:var(--ink3)}
+.critt{color:var(--crit)}
+/* the call list scrolls inside its panel so the health table below stays reachable */
+#list{max-height:620px;overflow:auto}
+#list th{position:sticky;top:0;z-index:1}
+.pager{display:flex;align-items:center;gap:8px;margin:8px 0 2px;font-size:12px;color:var(--ink2);flex-wrap:wrap}
+.lanebox{margin-top:6px;font-size:12px}
+.cfgbox{margin-top:10px}
+#tConfigs td.l{font-family:var(--mono);font-size:11px;word-break:break-word}
+.lanebox pre,.det pre{font-family:var(--mono);font-size:11px;background:var(--surf2);border:1px solid var(--line);
+  border-radius:3px;padding:6px 8px;overflow:auto;max-height:340px;white-space:pre;margin:4px 0}
+
+/* call detail */
+.ovl{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:60;display:none;padding:24px 16px;overflow:auto}
+.ovl.show{display:block}
+.det{background:var(--surf);border:1px solid var(--line2);border-radius:4px;max-width:1300px;margin:0 auto;padding:12px 14px 14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.det h3{margin:0 0 4px;font-size:14px}
+.det .hd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.det .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 16px;margin:8px 0;font-size:12px}
+.det .facts div b{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:600}
+.det h4{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin:12px 0 4px}
+.det tr.rel td{background:var(--critbg)}
+.det tr.away td{color:var(--ink3)}
+/* alarms window */
+.det.al{max-width:1180px}
+.al .hd .spacer{flex:1}
+.al h4{margin:14px 0 4px}
+.al input[type=number]{font:inherit;font-size:12px;background:var(--surf);color:var(--ink);border:1px solid var(--line2);border-radius:3px;padding:3px 6px;width:72px}
+.altbl td{vertical-align:top}
+.alcubes{display:flex;flex-wrap:wrap;gap:2px 12px;max-width:300px}
+.al .chk{white-space:nowrap;font-size:12px;display:inline-flex;align-items:center;gap:4px}
+.algrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px 20px;font-size:12px;align-items:center}
+.algrid label{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.algrid input[type=text]{flex:1;min-width:140px}
+.alacts{display:flex;gap:8px;align-items:center;margin:14px 0 4px;flex-wrap:wrap}
+.alacts .primary{background:var(--accent);border-color:var(--accent);color:var(--paper)}
+.okt{color:var(--ok)}
+.alst{padding:1px 7px;border-radius:9px;font-size:11px;font-weight:600;white-space:nowrap}
+.alst.alarm{background:var(--critbg);color:var(--crit)}
+.alst.ok{background:var(--okbg);color:var(--ok)}
+.alst.too-few{background:var(--surf3);color:var(--ink2)}
+.alst.missing,.alst.cannot-check{background:var(--warnbg);color:var(--warn)}
+.alst.clear,.alst.checking-again{background:var(--okbg);color:var(--ok)}
+.alst.notice{background:var(--surf3);color:var(--ink2)}
+.alhist{max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:3px}
+.alhist table{margin:0}
+.alhist td{font-size:12px}
+details summary{cursor:pointer;font-weight:600;font-size:12px}
+.note{font-size:12px;color:var(--ink2);margin:4px 0}
+.hint{font-size:11px;color:var(--ink3)}
+#tipbox{position:fixed;display:none;z-index:80;max-width:340px;background:var(--surf);border:1px solid var(--line2);
+  border-radius:4px;padding:7px 9px;font-size:11.5px;line-height:1.45;color:var(--ink2);box-shadow:0 6px 18px rgba(0,0,0,.18);
+  pointer-events:none;white-space:pre-line}
+[data-tipk]{cursor:help}
+.static-only{display:none}
+body.static .live-only{display:none}
+body.static .static-only{display:block}
+footer{margin-top:18px;font-size:11px;color:var(--ink3);font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Cube<span>Scope</span></h1>
+  <span class="meta" id="hdrSrc"></span>
+  <span class="meta" id="hdrSpan"></span>
+  <span class="spacer"></span>
+  <span class="meta"><span class="dot off" id="dot"></span><span id="hdrStatus"></span></span>
+  <button id="alarmsBtn" class="live-only" data-tipk="ui.alarms">Alarms</button>
+  <button id="settingsBtn" class="live-only" data-tipk="ui.settings">Settings</button>
+  <button id="adminBtn" class="live-only" data-tipk="ui.admin">Admin</button>
+  <button id="theme" data-tipk="ui.theme">Theme</button>
+</header>
+
+<div class="static-only note" id="staticNote"></div>
+
+<div class="bar live-only" id="bar">
+  <div class="row">
+    <div class="grp" data-tipk="ui.range">
+      <label>Range</label>
+      <button data-rel="1h">Last hour</button><button data-rel="24h">Last 24 h</button><button data-rel="today">Last day</button>
+      <button data-rel="prev">Day before</button><button data-rel="7d">7 days</button><button data-rel="all">All</button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp" data-tipk="ui.fromto">
+      <input type="datetime-local" id="from" aria-label="From"><label>to</label><input type="datetime-local" id="to" aria-label="To">
+      <button id="applyRange">Show</button>
+    </div>
+    <span class="sep"></span>
+    <div class="grp" data-tipk="ui.bucket">
+      <label for="bucket">Points every</label>
+      <select id="bucket"><option value="auto">auto</option><option value="1m">1 min</option><option value="5m">5 min</option>
+        <option value="15m">15 min</option><option value="30m">30 min</option><option value="1h">1 hour</option><option value="1d">1 day</option></select>
+    </div>
+    <div class="grp" data-tipk="ui.zone"><label for="zone">Times in</label><select id="zone"></select></div>
+    <div class="grp" id="srcGrp" hidden><label for="src">CUBE</label><select id="src"></select></div>
+    <span class="spacer"></span>
+    <button id="live" data-tipk="ui.live">Live</button>
+    <a id="csv" href="#" data-tipk="ui.csv">CSV</a>
+    <a id="report" href="#" data-tipk="ui.report">Report</a>
+  </div>
+  <div class="row">
+    <label for="filter" data-tipk="ui.filter">Filter</label>
+    <input type="text" id="filter" list="filterList" autocomplete="off" spellcheck="false" placeholder="called=251* result=unanswered   (a number alone searches every number)">
+    <datalist id="filterList"></datalist>
+    <button id="applyFilter">Apply</button><button id="clearFilter">Clear</button>
+    <select id="recentF" aria-label="Recent filters" data-tipk="ui.recentf"></select>
+    <span class="ferr" id="ferr"></span>
+  </div>
+  <div class="row live-only" id="findRow">
+    <label data-tipk="ui.find">Find</label>
+    <div class="grp" data-tipk="ui.fcause"><label for="fCause">Cause</label><select id="fCause"></select>
+      <select id="fCauseOn" aria-label="Which cause"><option value="cause">deciding the call</option><option value="legcause">on any leg</option></select></div>
+    <div class="grp" data-tipk="ui.fmedia"><label for="fMedia">Audio</label><select id="fMedia"></select></div>
+    <div class="grp" data-tipk="ui.fresult"><label for="fResult">Result</label><select id="fResult"></select></div>
+    <div class="grp" data-tipk="ui.frel"><label for="fRel">Released by</label><select id="fRel"></select></div>
+    <div class="grp" data-tipk="ui.ftalk"><label for="fTalk">Talk</label><select id="fTalk"></select></div>
+    <div class="grp" id="gDialPeer" style="display:none" data-tipk="ui.fdialpeer"><label for="fDialPeer">Dial-peer</label><select id="fDialPeer"></select></div>
+    <div class="grp" id="gCodec" style="display:none" data-tipk="ui.fcodec"><label for="fCodec">Codec</label><select id="fCodec"></select></div>
+  </div>
+  <div class="row">
+    <span class="crumbs" id="crumbs"></span>
+    <button id="back" data-tipk="ui.zoom" hidden>Back</button>
+    <span class="busy" id="busy" hidden><span class="spin"></span><span id="busyText">loading</span></span>
+  </div>
+</div>
+
+<div class="dim">
+<div class="tiles" id="tiles"></div>
+
+<div class="panel full" data-tipk="panel.calls">
+  <h2>Calls by result</h2><div class="sub" id="subCalls"></div>
+  <div class="legend" id="lgCalls"></div>
+  <div class="cwrap"><canvas id="cCalls"></canvas></div>
+</div>
+
+<div class="grid2">
+  <div class="panel" data-tipk="panel.asr"><h2>Answered</h2><div class="sub" id="subAsr"></div>
+    <div class="legend" id="lgAsr"></div><div class="cwrap"><canvas id="cAsr"></canvas></div></div>
+  <div class="panel" data-tipk="panel.conc"><h2>Concurrent</h2><div class="sub" id="subConc"></div>
+    <div class="legend" id="lgConc"></div><div class="cwrap"><canvas id="cConc"></canvas></div></div>
+  <div class="panel" data-tipk="panel.ring"><h2>Ring time</h2><div class="sub" id="subRing"></div>
+    <div class="legend" id="lgRing"></div><div class="cwrap"><canvas id="cRing"></canvas></div></div>
+  <div class="panel" data-tipk="panel.talk"><h2>Talk time</h2><div class="sub" id="subTalk"></div>
+    <div class="legend" id="lgTalk"></div><div class="cwrap"><canvas id="cTalk"></canvas></div></div>
+  <div class="panel" data-tipk="panel.causes"><h2>Not answered, by cause</h2><div class="sub" id="subCauses"></div>
+    <div class="legend" id="lgCauses"></div><div class="cwrap"><canvas id="cCauses"></canvas></div></div>
+  <div class="panel" data-tipk="panel.media"><h2>Media problems</h2><div class="sub" id="subMedia"></div>
+    <div class="legend" id="lgMedia"></div><div class="cwrap"><canvas id="cMedia"></canvas></div></div>
+  <div class="panel" data-tipk="panel.xfer"><h2>Transfers</h2><div class="sub" id="subXfer"></div>
+    <div class="legend" id="lgXfer"></div><div class="cwrap"><canvas id="cXfer"></canvas></div></div>
+  <div class="panel" data-tipk="panel.a2t"><h2>Answer to transfer connect</h2><div class="sub" id="subA2t"></div>
+    <div class="legend" id="lgA2t"></div><div class="cwrap"><canvas id="cA2t"></canvas></div></div>
+</div>
+
+<div class="panel full" data-tipk="panel.lanes">
+  <h2>Events</h2><div class="sub" id="subLanes"></div>
+  <div class="cwrap"><canvas id="cLanes"></canvas></div>
+  <div class="lanebox" id="laneBox"></div>
+  <div class="cfgbox" data-tipk="panel.configs"><div class="sub" id="subConfigs">last 10 configuration changes</div>
+    <div class="tblwrap" id="tConfigs"></div></div>
+</div>
+
+<div class="grid2">
+  <div class="panel" data-tipk="panel.called"><h2>Top called numbers</h2><div class="tblwrap" id="tCalled"></div></div>
+  <div class="panel" data-tipk="panel.calling"><h2>Top calling numbers</h2><div class="tblwrap" id="tCalling"></div></div>
+  <div class="panel" data-tipk="panel.connected"><h2>Top connected-to</h2><div class="tblwrap" id="tConnected"></div></div>
+  <div class="panel" data-tipk="panel.causetbl"><h2>Causes</h2><div class="tblwrap" id="tCauses"></div></div>
+  <div class="panel" id="pDialPeer" style="display:none" data-tipk="panel.dialpeer"><h2>By dial-peer</h2><div class="tblwrap" id="tDialPeer"></div></div>
+  <div class="panel" id="pMedia" style="display:none" data-tipk="panel.mediaip"><h2>By far-end media address</h2><div class="tblwrap" id="tMedia"></div></div>
+  <div class="panel" id="pCodec" style="display:none" data-tipk="panel.codec"><h2>By codec</h2><div class="tblwrap" id="tCodec"></div></div>
+  <div class="panel" id="pCubeStats" style="display:none" data-tipk="panel.cubestats"><h2>Ringing and call quality</h2><div id="tCubeStats"></div></div>
+  <div class="panel wide" data-tipk="panel.canceled"><h2>Canceled while ringing</h2><div class="sub" id="subCanceled"></div><div class="csplit"><div id="cStrip"></div><div class="tblwrap" id="tCanceled"></div></div></div>
+</div>
+
+<div class="panel full" data-tipk="panel.list">
+  <h2>Calls</h2><div class="sub" id="subList"></div>
+  <div class="tblwrap" id="list"></div>
+  <div class="pager" id="pager"></div>
+</div>
+
+<div class="panel full" data-tipk="panel.clock">
+  <h2>Clocks and time zones</h2><div class="sub" id="subClock"></div>
+  <div class="tblwrap" id="clock"></div>
+</div>
+
+<div class="panel full" data-tipk="panel.health">
+  <h2>Feed health</h2>
+  <div class="tblwrap" id="health"></div>
+  <div class="note" id="rulesNote"></div>
+</div>
+</div>
+<footer id="foot"></footer>
+</div>
+
+<div class="ovl" id="ovl" role="dialog" aria-modal="true" aria-label="Call detail"><div class="det" id="det"></div></div>
+<div class="ovl" id="alOvl" role="dialog" aria-modal="true" aria-label="Alarms"><div class="det al" id="alDet"></div></div>
+<div class="ovl" id="adOvl" role="dialog" aria-modal="true" aria-label="Admin"><div class="det al" id="adDet"></div></div>
+<div class="ovl" id="stOvl" role="dialog" aria-modal="true" aria-label="Settings"><div class="det al" id="stDet"></div></div>
+
+<script>
+"use strict";
+var STATIC = window.__STATIC || null;
+var S = null, CALLS = null, lastStateText = null, timer = null, inflight = 0, lastOk = 0;
+var stateGen = 0, listGen = 0;
+var view = {rel:"24h", from:null, to:null, bucket:"auto", filter:"", src:"-1", live:null, sort:"start", desc:true, page:0, zone:"cube"};
+var zoomStack = [];
+var hidden = {};          // legend toggles: chartId|label -> true
+
+function $(id){ return document.getElementById(id); }
+var _pal = {};
+function css(n){
+  if(!(n in _pal)) _pal[n] = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  return _pal[n];
+}
+/* innerHTML only when the markup changed, so an unchanged panel keeps its DOM across polls */
+function setHTML(el, h){
+  if(typeof el === "string") el = $(el);
+  if(!el) return false;
+  if(el._h === h) return false;
+  el.innerHTML = h; el._h = h;
+  return true;
+}
+function esc(s){ return String(s===null||s===undefined?"":s).replace(/[&<>"]/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function n0(v){ if(v===null||v===undefined||isNaN(v)) return "-"; return Math.round(v).toLocaleString("en-US"); }
+function pct(a, b){ return b>0 ? (100*a/b).toFixed(1)+"%" : "-"; }
+function dur(ms){
+  if(ms===null||ms===undefined||ms<0||isNaN(ms)) return "-";
+  if(ms<1000) return Math.round(ms)+" ms";
+  var s = ms/1000; if(s<60) return s.toFixed(1)+" s";
+  var t = Math.round(s);
+  if(t<3600) return Math.floor(t/60)+":"+two(t%60);
+  return Math.floor(t/3600)+":"+two(Math.floor(t/60)%60)+":"+two(t%60);
+}
+function two(n){ return (n<10?"0":"")+n; }
+/* Times are the CUBE's own clock, carried as if UTC: the UTC getters show it unchanged. */
+function dt(u){ var d = new Date(u*1000); return d; }
+function fmtT(u){ var d = dt(u); return two(d.getUTCHours())+":"+two(d.getUTCMinutes()); }
+function fmtTs(u){ var d = dt(u); return two(d.getUTCHours())+":"+two(d.getUTCMinutes())+":"+two(d.getUTCSeconds()); }
+function fmtD(u){ var d = dt(u); return d.getUTCFullYear()+"-"+two(d.getUTCMonth()+1)+"-"+two(d.getUTCDate()); }
+function fmtDT(u){ return fmtD(u)+" "+fmtT(u); }
+function fmtMs(ms){ var d = new Date(ms); return two(d.getUTCHours())+":"+two(d.getUTCMinutes())+":"+two(d.getUTCSeconds())+"."+("00"+d.getUTCMilliseconds()).slice(-3); }
+function fmtDMs(ms){ return fmtD(Math.floor(ms/1000))+" "+fmtMs(ms); }
+function dayName(u){ return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt(u).getUTCDay()]; }
+function localInput(u){ return fmtD(u)+"T"+fmtT(u); }
+function parseInput(s){ if(!s) return null; var m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(s); if(!m) return null;
+  return Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5])/1000; }
+/* the label for times on the page: the display clock's, else the CUBEs' own when they all share one */
+function tz(){
+  if(!S) return "";
+  if(S.zone && S.zone.id!=="cube") return S.zone.label || S.zone.name;
+  if(!S.sources || !S.sources.length) return "";
+  var t = S.sources[0].tz||"";
+  for(var i=1;i<S.sources.length;i++) if((S.sources[i].tz||"")!==t) return "(each CUBE's own clock)";
+  return t;
+}
+
+/* ---------------------------------------------------------------- hover descriptions
+   Everything explainable carries data-tipk="key" and the words live in TIPS; the self-test fails the
+   build when the page asks for a key that has none, or a description is too short or too long. */
+var TIPS = {
+  "tile.calls": "Calls that started in the range and pass the filter. A call is everything the CUBE logged under one GUID: both directions, transfers and hairpins, failed attempts. A rejected INVITE with no accounting record still counts, from its internal error or failure trace.",
+  "tile.answered": "Calls where a leg the CUBE placed was answered (its ConnectTime is before its DisconnectTime), as a share of all calls. Unanswered legs carry ConnectTime equal to DisconnectTime. A call the CUBE itself answered with no outbound leg also counts as answered.",
+  "tile.talk": "Mean talk time of answered calls, from the first answer to the last leg's disconnect. The small line gives the median and the 95th percentile, which say more than the mean when a few very long calls pull it up.",
+  "tile.abandoned": "Calls stopped while they rang, before anyone answered: the CUBE cancelled the outbound leg, so both legs carry cause 16. On a dialer call the dialer is the caller, so this is the dialer giving up (its no-answer timeout or a cancel), not a customer hanging up.",
+  "tile.noanswer": "Unanswered calls whose outbound leg came back with cause 18, 19 or 20 (no user responding, no answer, subscriber absent). The inbound leg on those calls only shows the CUBE's generic 47, so the outbound cause is the one that counts.",
+  "tile.busy": "Unanswered calls whose outbound leg came back user busy, cause 17.",
+  "tile.rejected": "Calls refused by the far end or the CUBE: causes 1, 21, 22 and 28, and INVITEs the CUBE turned away with no dial-peer match. Those last leave no accounting record at all; they are known from the internal error code and the failure trace.",
+  "tile.failed": "Unanswered calls ended by any other cause: temporary failure 41, network out of order 38, recovery on timer expiry 102, resource unavailable 47 and the rest. These are the network's or the CUBE's failures rather than a person's choice.",
+  "tile.media": "Answered calls where a talking leg (over 5 s) had no packets either way, or packets one way only. Signalling-only legs (the dialer's) are never judged, and on a dialer call the customer leg is judged from the transfer, because the CUBE counts nothing while the dialer listens.",
+  "tile.lowrate": "Answered calls where a talking leg ran under half the 50 packets a second of 20 ms packetisation on a side. Hold without music sends nothing, so a held call shows here; so does late or patchy media.",
+  "tile.xfer": "Blind transfers (SIP REFER) seen on the calls, counted once per transfer although the CUBE logs one record on each bridged leg. The line below gives the share of calls that had one.",
+  "tile.a2t": "Median time from the first answer to the moment a leg placed after the first transfer answered: on a dialer call, from the customer answering to the agent side picking up. It includes the dialer's answer detection, so long values on message drops to answering machines are normal.",
+  "tile.peak": "The most calls up at the same moment in the range, from start to end of every matching call, with the time it happened. The small line gives the most legs at once, which is closer to the trunk sessions the CUBE is licensed for.",
+  "tile.release": "Who started the teardown of answered calls. The leg that disconnected first marks the side that hung up, because the CUBE clears the other legs only after it. Caller is the far end of an inbound leg, called the far end of an outbound one.",
+  "tile.feed": "Messages the CUBE numbered but the files do not hold, from gaps in the IOS sequence numbers of syslog messages: lost in transit (syslog is UDP) or below the logging trap level. A lost accounting record shows as a leg without its TWC record or a TWC with no leg.",
+  "panel.calls": "Every call in the range by how it ended, one point per bucket by start time. Click a legend entry to hide that result and rescale. Drag across a chart to zoom; Back returns. Click a coloured band to keep only that band's calls over the same range, and click it again to take it off.",
+  "panel.asr": "The share of calls answered in each bucket, and the mean talk time of the answered ones on its own chart below, rather than a second scale. A dip with a steady call count usually points at one destination or one cause: read the cause chart beside it.",
+  "panel.conc": "The most calls and the most legs up at once in each bucket. Legs approach what the CUBE counts against its trunk licence. The dashed step is the CUBE's own hourly licence request (CUBE-5-LICENSE_INFO), shown where the feed carries it.",
+  "panel.ring": "Time from a call's first setup to its first answer, median and 95th percentile per bucket, answered calls only. On dialer calls this is the time the customer took to pick up; on inbound calls the time until the CUBE's outbound leg was answered.",
+  "panel.talk": "Talk time of answered calls, from answer to the last disconnect: median, 95th percentile and mean per bucket. A median that drops while answered calls hold steady often means short calls, such as answering machines or immediate hang-ups.",
+  "panel.causes": "Calls not answered, by the cause that decided them: the outbound leg's cause when there is one, since on a refused call the inbound leg only carries the CUBE's generic 47. The six commonest causes in the range, then everything else together. Click a band to keep only its calls; click again to take it off.",
+  "panel.media": "Answered calls with a media problem on a talking leg: no packets, packets one way only, or under half the expected packet rate. Message drops to answering machines are one-way by nature: the prompt plays and the machine sends nothing back. Click a band to keep only its calls; click again to take it off.",
+  "panel.xfer": "Blind transfers per bucket, one per REFER even though the CUBE writes a record on both bridged legs. On this kind of feed nearly all come from the outbound dialer handing an answered customer to an agent or an IVR. Click the band to keep only the calls with a transfer; click again to take it off.",
+  "panel.a2t": "From the first answer to the answer of the first leg placed after the transfer: median and 95th percentile. For a dialer call that is the dead air a customer hears between saying hello and reaching the agent side, answer detection included.",
+  "panel.configs": "The ten newest configuration changes (Configured from console, logged commands), whatever range the page shows, of the CUBE picked or of all. The service keeps them in its data folder, so they outlive its 24-hour window and a restart.",
+  "panel.lanes": "Everything else the CUBE sent, one row per kind, darker where there were more in a bucket. Click a cell to list those messages. Failure traces and internal errors are calls the accounting may not show; TLS failures, logins and configuration changes explain spikes.",
+  "panel.called": "The numbers the CUBE dialled most, with how many were answered and their mean talk. On dialer calls this is the customer's number without the dialer's routing prefix. Click a number to filter the whole page to it.",
+  "panel.calling": "The calling numbers seen most. An empty calling number is the SIP dialer's own leg. Click a number to filter the whole page to it.",
+  "panel.connected": "Where answered calls actually ended up when that differs from the number dialled: the agent extension behind a CVP label, or the agent side of a dialer transfer. Click a number to filter the whole page to it.",
+  "panel.canceled": "Calls stopped while they rang, before anyone answered, by how long they ran first and by who stopped them. People hang up at scattered times; a tall narrow pile is a machine's timer, such as a dialer's no-answer timeout. Click a bar or a count to list those calls.",
+  "chart.canceled": "One bar per second the call ran before the cancel, from under 1 s on the left to 120 s or more on the right. Orange is the dialer giving up, blue is a caller hanging up. Hover for the counts; click a bar to list that second's calls.",
+  "col.cwho": "Dialer: a dialer call (its first leg arrived with no calling number) that the dialer stopped itself. Caller: any other call, where the caller hung up before the far end answered.",
+  "col.cwhen": "From the call's first setup to the cancel, in whole seconds, so it includes the time before the far end began to ring. A pile is a run of seconds that each hold at least 1% of that side's cancels and at least 3 calls.",
+  "col.ccalls": "How many calls were canceled after running that long. Click a count to list those calls; the filter box shows the clauses it used, which you can edit.",
+  "col.cside": "Share of all the cancels by that side (dialer or caller), so the dialer's piles add up to 100% with its other lengths.",
+  "panel.causetbl": "Every deciding cause in the range with what it meant for the calls: answered, or which unanswered result, and which side released. Answered calls carry the cause of the leg that cleared first, normally 16. Click a row to filter to that cause.",
+  "panel.list": "The calls in the range that pass the filter, 200 to a page. Click a column heading to sort by it, again to reverse. Click a call for every leg, transfer, error and the raw log lines it was read from.",
+  "panel.health": "How complete the feed is for each CUBE. Legs without their TWC record or TWC records without a leg are accounting messages lost on the way; the IOS sequence gaps count every message that never arrived. Lines not used are debug text outside failure traces.",
+  "panel.clock": "Each CUBE's clock against the syslog server's. The server names each file by its own hour, so the times inside show how far ahead or behind a CUBE is. Whole hours are a zone difference; anything else is a wrong clock. A busy CUBE is pinned to a second or two.",
+  "panel.detail": "Everything the CUBE logged for one call. Legs are listed in setup order: in is a leg the CUBE answered, out one it placed. The leg that disconnected first is marked, since that side released the call; the dialer's leg released by its own transfer is greyed.",
+  "col.start": "When the call's first leg was set up, on the clock picked under Times in (each CUBE's own unless you change it). Sort by any column; ties keep start order.",
+  "col.ncalls": "Calls with this number, and in grey their share of every call in the range.",
+  "col.nunans": "Calls with this number that nobody answered, and in grey their share of this number's calls.",
+  "col.nbad": "Answered calls with this number that had no audio or audio one way only, and in grey their share of this number's answered calls.",
+  "row.ntotal": "The numbers listed added up: their calls and share of every call in the range, then answered, talk, unanswered and bad media across them.",
+  "ui.zone": "Which clock times are shown on. Each CUBE's own clock is what it logged. The syslog server's clock, UTC or a US zone puts CUBEs in different zones on one timeline, corrected by the clock check below. A range you typed keeps its numbers on the new clock.",
+  "col.dur": "From the first leg's setup to the last leg's disconnect, ringing and transfers included.",
+  "col.ring": "From setup to the first answer of a leg the CUBE placed; blank when nothing answered.",
+  "col.talk": "From the first answer to the last disconnect of the call; zero when it was not answered.",
+  "col.calling": "The calling number on the first inbound leg, or on the first outbound leg when the inbound one has none (the dialer sends none). Click to filter.",
+  "col.called": "What the CUBE dialled on its first outbound leg: after its own number translation, so without the dialer's routing prefix. Click to filter.",
+  "col.connected": "The far end of the last outbound leg to answer, when that is not the number dialled: an agent extension behind a CVP label, or the agent side of a transfer. Click to filter.",
+  "col.legs": "How many call history records the CUBE wrote under this GUID: two for a plain call, more for transfers and hairpins.",
+  "col.result": "How the call ended, decided by the outbound leg's cause when there is one. Hover the pill on a dialer call: a caller hang-up there is the dialer stopping the ring.",
+  "col.rel": "Which far end started the teardown: the side whose leg disconnected first. Network means that leg's cause was a failure such as 41, 47 or 102, so the CUBE or a carrier ended it.",
+  "col.cause": "The deciding Q.850 cause: the first-cleared leg's on an answered call, the outbound leg's on an unanswered one, printed in hex by the CUBE and shown here in decimal.",
+  "col.media": "The worst media seen on a talking leg: none, one-way or low packet rate; blank when no leg talked long enough to judge or every leg was signalling-only. On low rate and one-way, the packets a second sent / received on the leg that decided it (20 ms audio is 50 a second each way); hover for the leg.",
+  "col.feeds": "Where this call's details came from. Syslog: the CUBE's accounting messages (gw-accounting syslog). SFTP: its call record files (gw-accounting file, usually sent over SFTP). Media: the CUBE sent media statistics for a leg (gw-accounting syslog stats, or measured values in the files). A dim label means that source said nothing about this call.",
+  "leg.peer": "The dial-peer the CUBE matched for each leg. Only the call record files carry it; with syslog alone this shows a dash.",
+  "call.same": "Every call loaded with the same called number, on every CUBE: how many failed (rejected or failed: the network or the far end refused it), how many were answered, and the rest by result. Click to list them.",
+  "col.xfer": "Blind transfers on the call and the time from answer to the transfer target's answer.",
+  "col.tags": "Labels from the number rules: dialer for the dialer's leg, extension and external for the shape of the far number, and anything added in cubescope.rules.",
+  "ui.range": "Ranges are counted back from the newest record, not from the clock on this PC, so an old archive opens on its own last day. Last day and Day before are whole calendar days on the CUBE's clock.",
+  "ui.fromto": "Any range on the CUBE's clock. A range far longer than the points available is drawn with wider buckets automatically; the call list always holds every matching call in the range.",
+  "ui.bucket": "How much time each point on the charts covers. Auto keeps the charts to about 720 points: one minute for a few hours, five minutes for a day, half an hour for two weeks. A finer choice is widened if it would draw more than 3,000 points.",
+  "ui.filter": "Clauses separated by spaces must all hold; commas give alternatives. Number fields (called=, calling=, connected=, dialed=, peer=, any=, legfail=) take 251 (starts with), 251* or ? wildcards, a quoted exact number or re:. Also result=, cause= or legcause= (any leg), released=, media= (none, oneway, lowrate, problem), talk>=30, tag=, has=dump and !clause.",
+  "ui.recentf": "The last 15 filters used in this browser, newest first, including ones the pickers and chart clicks wrote. Pick one to use it again; they also come up as suggestions while typing in the box. Kept in this browser only.",
+  "ui.find": "Pickers that write the filter for you, each owning one clause: choose a value to replace that clause, any to drop it. Counts are over the whole range before filtering, so the other choices stay visible. Clicking a result, media or release tile does the same.",
+  "ui.fcause": "Calls by Q.850 cause. Deciding the call is the cause that decided it (the outbound leg's on an unanswered call); on any leg finds a cause anywhere on the call. A hang-up while ringing carries 16 like a normal clearing, so the two entries at the top find those calls by result instead.",
+  "ui.fmedia": "Calls by the worst media on a talking leg: no packets either way, packets one way only, or under half the 50 a second of 20 ms packetisation. Any problem takes all three. Signalling-only dialer legs are never judged.",
+  "ui.fresult": "Calls by how they ended. Not answered takes every result except answered. Canceled while ringing splits into the caller hanging up and the dialer giving up (a dialer call the dialer stopped itself).",
+  "ui.frel": "Calls by which side started the teardown: caller is the far end of an inbound leg, called the far end of an outbound one, network a failure cause such as 41, 47 or 102.",
+  "ui.ftalk": "Calls by talk time. Answered calls that ended within a few seconds are often someone hanging up on silence, so under 10 s next to an audio problem is worth a look.",
+  "ui.live": "Re-reads every five seconds while new records arrive. On by itself whenever CubeScope is following the feed; press it to turn it off or on, and that choice is kept. Last hour, Last 24 h and 7 days move with the feed; a zoomed or typed range stays put. Calls still up are not shown until they end.",
+  "ui.csv": "Every call in the range that passes the filter as a CSV file, one row per call. Numbers are written so a spreadsheet keeps leading zeros and long digits intact.",
+  "ui.report": "This view, range and filter included, saved as one HTML file that opens anywhere without CubeScope. The first 500 calls are kept in it; call detail needs the running tool.",
+  "ui.zoom": "Goes back to the range you were looking at before the last zoom (a drag across a chart, a typed range or Show).",
+  "ad.remote": "Lets other computers open this dashboard over HTTPS on a port of its own. People sign in with their Windows account; only members of the group (and this server's administrators) get in. Without a thumbprint CubeScope makes its own certificate, which browsers warn about until it is trusted.",
+  "ad.log":"OpenSSH logs every connection step and every file-transfer request (sizes and answers) into Windows' OpenSSH event logs for the time chosen. A Windows scheduled task then turns it off, even with this page closed, saves the lines to one text file and puts the event logs' sizes back.",
+  "ui.settings":"How long old syslog and call record files are kept before CubeScope deletes them, and how this CubeScope was started: the folder it reads, how much it keeps in memory, its data folder and log.",
+  "st.keep": "The CubeScope service deletes old files in the folder it reads, every hour. Set either to 0 to keep those files.",
+  "st.about": "Set when CubeScope was started or installed as a service; reinstall the service (Admin, or --install-service) to change them.",
+  "ui.alarms": "The alarm settings: which DNIS to watch on which CUBEs, the failure limit, and whether to raise a Windows event, an SNMP trap or both. Alarms run in the CubeScope service, once on the breach and once on the clear. Test alarm sends a test alarm and its clear.",
+  "al.rules": "One row per thing to watch: a number (called, as dialled, a transfer target, or any leg), a dial-peer, a far-end address (192.0.2.10, or starts with 192.0.2. for a range), or every call on the CUBE. Dial-peers and addresses need call record files. No CUBE ticked: every CUBE. An alarm needs more than the limit and the minimum calls and failures.",
+  "al.how": "Where an alarm goes. The Windows Application log gets event 1001 for an alarm and 1002 for its clear; SNMP traps go to each address with the trap OID followed by .1001 or .1002, and carry the CUBE, DNIS, counts and a key the alarm and its clear share.",
+  "ui.admin": "Sets this Windows server up to receive call record files from CUBEs over SFTP: OpenSSH, the account, the folder, the port and the firewall rule. It lists what will change before doing anything, and only a window opened as administrator can make the changes.",
+  "panel.dialpeer": "Calls by the dial-peer each leg used, from the CUBE's call record files. A call counts once for each dial-peer it touched, normally one inbound and one outbound. Click a dial-peer to filter the page to it, or type dialpeer=20.",
+  "panel.mediaip": "Calls by the address the far end sent audio from, from the CUBE's call record files. Bad media here points at one carrier, site or device. Click an address to filter the page to it, or type mediaip=192.0.2.* with a wildcard.",
+  "panel.codec": "Calls by the codec on their legs, from the CUBE's call record files. A call using two codecs counts once for each. Click one to filter the page to it, or type codec=g711ulaw. codec=200 still means bytes per packet.",
+  "panel.cubestats": "Time to ringing is from a leg's setup until the far end said it was ringing. Quality appears once the CUBE is measuring it. A call is poor when its worst leg has MOS under 3.5 or loss above 1%. The filter words are alert, mos, loss, lost, jitter and rtt, each with a limit.",
+  "leg.cdr": "Columns only a CUBE's call record files carry: the dial-peer each leg matched, its codec, where the far end sent audio from, how long until it rang, and each number as it arrived and as it was sent after translation.",
+  "ui.fdialpeer": "Keeps the calls that used this dial-peer on any leg, with how many calls used each in the range. It appears when CubeScope reads a CUBE's call record files. Syslog does not say which dial-peer a call used.",
+  "ui.fcodec": "Keeps the calls that used this codec on any leg, with how many calls used each in the range. It appears when CubeScope reads a CUBE's call record files. Syslog does not name the codec.",
+  "al.stale": "Raises an alarm for each CUBE whose newest call record is older than this, and a clear when records return: Windows events 1005 and 1006, and traps with those numbers. Set it longer than your quietest stretch, because a CUBE writes a record only when a call ends. Only sources a call record has been read from are watched. Needs Alarms on.",
+  "al.keep": "Deletes the call record files a CUBE sent over SFTP once they are older than this many days, checked every hour. Only files named the way a CUBE names them are touched, in the folder CubeScope reads. It works even with Alarms off. 0 keeps everything.",
+  "al.keepLog": "Deletes hourly syslog files named like cube-2026-11-09-14.log, with their .sha256 files, in the folder CubeScope reads, once the hour in the name and the last change are both this many days old. Checked hourly, even with Alarms off. Other names stay. Deleted files are gone for good, and those calls leave the dashboard after a restart. 0 keeps everything.",
+  "hl.also": "CubeScope found the same calls under both names, so it treats them as one CUBE: its syslog files are named by address and its call record files by host name.",
+  "hl.two": "Legs this CUBE reported in both syslog and its call record files are shown once, with what each feed adds. A leg in only one feed usually means syslog lost a message, or the files have not arrived yet.",
+  "al.test": "Sends what is on screen, saved or not: event 1000 to the Application log, and with trap addresses a test alarm trap and, ten seconds later, its clear. Both are on CUBE TEST, so a test can never close a real alarm.",
+  "al.note": "Your own words added to this DNIS's alarm and clear: the last line of the Application-log event, and the trap's last field (the trap OID followed by .13). For example who to call or which runbook to follow. One line, up to 500 characters.",
+  "al.cancelmin": "A call canceled while ringing counts as failed only when the cancel came at least this many seconds after the call was set up, so callers who hang up at once are left out. 0 counts every cancel. It applies when canceled while ringing is ticked.",
+  "al.history": "Every alarm, clear, cannot-check warning and test this CubeScope sent, newest first, with whether the event log took it and which addresses the trap went to. It survives restarts and keeps the newest thousand.",
+  "al.status": "The latest check of every rule on every CUBE: the calls in the window, how many failed, and whether an alarm is open. A CUBE with too few calls, such as the standby of a pair, is never an alarm.",
+  "ui.theme": "Switches between the light and dark palettes and remembers the choice in this browser. With no choice made the page follows the operating system. Charts are redrawn because their colours are read from the stylesheet.",
+  "lane.dump": "Call failure traces (the Cover Buffer): the CUBE's own record of a call it failed, with the buffered SIP messages. The call detail shows the trace in full.",
+  "lane.iec": "Internal error codes (VOICE_IEC-3-GW) with the call's GUID, such as no dial-peer match or a SIP timer expiring. A rejected INVITE leaves no accounting record, only this.",
+  "lane.tlsfail": "SIP TLS handshakes that failed, with the far address. A steady one-a-minute row is usually one peer retrying a connection that never comes up.",
+  "lane.tls": "SIP TLS connections opened and closed. Closures next to call failures can explain them.",
+  "lane.sipstate": "SIP state machine events the CUBE did not expect (BADPAIR, IGNORE). Usually harmless races at teardown; a burst is worth a look.",
+  "lane.sip": "Other SIP messages from the CUBE that are not TLS or state machine events.",
+  "lane.licence": "The CUBE's hourly request for trunk licences. The count is drawn on the concurrency chart as a reference line.",
+  "lane.login": "Logins, logouts and SSH sessions on the CUBE, with the user and source address.",
+  "lane.config": "Commands logged by the configuration archive (PARSER-5-CFGLOG). A change right before a spike in failures is the first thing to check.",
+  "lane.other": "Any other syslog message from the CUBE: certificates, access lists, and so on.",
+  "leg.dir": "in: a leg the CUBE answered (CallOrigin 2); out: a leg it placed (CallOrigin 1); ?: a TWC record whose call history line never arrived.",
+  "leg.packets": "Packets sent and received on the leg, from the CUBE's side, with bytes per packet: 200 is G.711 at 20 ms, 210 G.711 with SRTP, 60 G.729. Bridged legs mirror each other.",
+  "leg.timeline": "Each leg from setup to disconnect: the pale part is ringing, the solid part connected. Dashed lines are transfers. The leg outlined in red disconnected first, so its far end released the call."
+};
+function tipk(k){ return TIPS[k] ? ' data-tipk="'+k+'"' : ''; }
+function tipFor(el){
+  while(el && el.getAttribute){
+    var t = el.getAttribute("data-tip");
+    if(t) return t;
+    var k = el.getAttribute("data-tipk");
+    if(k && TIPS[k]) return TIPS[k];
+    el = el.parentNode;
+  }
+  return null;
+}
+/* The card follows the pointer and re-resolves after every render, so a poll does not close it. */
+var tipRefresh = function(){};
+function tipInit(){
+  var box = document.createElement("div");
+  box.id = "tipbox";
+  document.body.appendChild(box);
+  var shown = false, px = -1, py = -1, inside = false;
+  function place(){
+    var w = box.offsetWidth, h = box.offsetHeight;
+    var l = px + 15, t = py + 17;
+    if(l + w > window.innerWidth - 8) l = Math.max(8, px - w - 15);
+    if(t + h > window.innerHeight - 8) t = Math.max(8, py - h - 13);
+    box.style.left = l + "px"; box.style.top = t + "px";
+  }
+  function hide(){ if(shown){ box.style.display = "none"; shown = false; } }
+  function show(t){ if(box.textContent !== t) box.textContent = t; if(!shown){ box.style.display = "block"; shown = true; } place(); }
+  function at(){ if(!inside || px < 0) return null; var el = document.elementFromPoint(px, py); return el ? tipFor(el) : null; }
+  document.addEventListener("mousemove", function(ev){
+    inside = true; px = ev.clientX; py = ev.clientY;
+    var t = tipFor(ev.target); if(t) show(t); else hide();
+  });
+  document.documentElement.addEventListener("mouseleave", function(){ inside = false; hide(); });
+  window.addEventListener("scroll", function(){ var t = at(); if(t) show(t); else hide(); });
+  window.addEventListener("blur", function(){ inside = false; hide(); });
+  tipRefresh = function(){ if(!shown) return; var t = at(); if(t) show(t); else hide(); };
+}
+
+/* ---------------------------------------------------------------- charts */
+function prep(cv, h){
+  var r = window.devicePixelRatio || 1;
+  var w = cv.clientWidth || 300;
+  var pw = Math.round(w*r), ph = Math.round(h*r);
+  if(cv.width !== pw) cv.width = pw;
+  if(cv.height !== ph) cv.height = ph;
+  if(cv.style.height !== h + "px") cv.style.height = h + "px";
+  var g = cv.getContext("2d");
+  g.setTransform(r,0,0,r,0,0);
+  g.clearRect(0,0,w,h);
+  return {g:g, w:w, h:h};
+}
+function nice(v){
+  if(v===0) return "0";
+  if(v>=1000) return Math.round(v).toLocaleString("en-US");
+  if(v>=100) return Math.round(v).toString();
+  if(v>=10) return v.toFixed(0);
+  if(v>=1) return v.toFixed(1);
+  return v.toFixed(2);
+}
+/* One axis per chart, always. A chart is {series:[{label, color, v, stack, dash, step}], unit, fmt, max}.
+   Stacked series are states of the same thing drawn on top of each other, so the top edge is their total;
+   lines share the same scale. The x axis is the bucket grid S.series.t. */
+var CHARTS = {};
+function tsChart(id, height, spec){
+  var cv = $(id); if(!cv) return;
+  var t = S.series.t, n = t.length;
+  var p = prep(cv, height), g = p.g, w = p.w, h = p.h;
+  var pad = {l:48, r:10, t:8, b:22};
+  var iw = w-pad.l-pad.r, ih = h-pad.t-pad.b;
+  var shown = spec.series.filter(function(s){ return !hidden[id+"|"+s.label]; });
+  var stack = shown.filter(function(s){ return s.stack; }), lines = shown.filter(function(s){ return !s.stack; });
+  var total = [], i, j, max = 0;
+  for(i=0;i<n;i++){ var sum = 0; for(j=0;j<stack.length;j++) sum += Math.max(0, stack[j].v[i]||0); total.push(sum); if(sum>max) max = sum; }
+  lines.forEach(function(l){ for(var i=0;i<n;i++){ var v = l.v[i]; if(v!==null && !isNaN(v) && v>max) max = v; } });
+  if(spec.max) max = Math.max(max, spec.max);
+  max = max>0 ? max*1.12 : 1;
+  if(spec.cap) max = Math.min(max, spec.cap);
+  var fmtv = spec.fmt || function(v){ return nice(v); };
+  g.strokeStyle = css("--line"); g.lineWidth = 1; g.font = "10px " + css("--mono"); g.textBaseline = "middle";
+  for(i=0;i<=4;i++){
+    var y = pad.t + ih*i/4;
+    g.beginPath(); g.moveTo(pad.l, Math.round(y)+0.5); g.lineTo(w-pad.r, Math.round(y)+0.5); g.stroke();
+    g.textAlign = "right"; g.fillStyle = css("--ink3");
+    g.fillText(fmtv(max*(1-i/4)), pad.l-5, y);
+  }
+  if(n>1){
+    var labels = Math.max(2, Math.min(8, Math.floor(iw/90)));
+    var multiDay = (t[n-1]-t[0]) >= 86400;
+    g.textAlign = "center"; g.textBaseline = "top"; g.fillStyle = css("--ink3"); g.strokeStyle = css("--line2");
+    for(var q=0;q<labels;q++){
+      i = Math.round(q*(n-1)/(labels-1));
+      var x = pad.l + iw*(i/(n-1));
+      g.beginPath(); g.moveTo(Math.round(x)+0.5, h-pad.b); g.lineTo(Math.round(x)+0.5, h-pad.b+4); g.stroke();
+      var lab = S.range.bucket>=86400 ? fmtD(t[i]).slice(5)+" "+dayName(t[i]) : (multiDay ? fmtD(t[i]).slice(5)+" "+fmtT(t[i]) : fmtT(t[i]));
+      g.fillText(lab, Math.min(w-pad.r-20, Math.max(pad.l+20, x)), h-pad.b+6);
+    }
+  }
+  CHARTS[id] = {spec:spec, pad:pad, iw:iw, ih:ih, n:n, t:t, h:h, max:max, stack:stack};
+  if(n<1 || (stack.length===0 && lines.length===0)){ noData(g,w,h,"nothing to show"); return; }
+  function X(i){ return n>1 ? pad.l + iw*(i/(n-1)) : pad.l + iw/2; }
+  function Y(v){ return pad.t + ih*(1 - Math.max(0, Math.min(1, v/max))); }
+  var base = []; for(i=0;i<n;i++) base.push(0);
+  stack.forEach(function(s){
+    var top = []; for(i=0;i<n;i++) top.push(base[i] + Math.max(0, s.v[i]||0));
+    g.beginPath();
+    for(i=0;i<n;i++){ if(i===0) g.moveTo(X(i), Y(top[i])); else g.lineTo(X(i), Y(top[i])); }
+    for(i=n-1;i>=0;i--) g.lineTo(X(i), Y(base[i]));
+    g.closePath(); g.globalAlpha = 0.85; g.fillStyle = s.color; g.fill(); g.globalAlpha = 1;
+    /* a thin surface-coloured edge keeps neighbouring bands apart */
+    g.strokeStyle = css("--surf"); g.lineWidth = 1;
+    g.beginPath(); for(i=0;i<n;i++){ if(i===0) g.moveTo(X(i), Y(top[i])); else g.lineTo(X(i), Y(top[i])); } g.stroke();
+    base = top;
+  });
+  lines.forEach(function(l){
+    g.strokeStyle = l.color; g.lineWidth = 2; g.lineJoin = "round";
+    if(l.dash) g.setLineDash([5,4]);
+    g.beginPath();
+    var pen = false, prevY = 0;
+    for(i=0;i<n;i++){
+      var v = l.v[i];
+      if(v===null || v===undefined || isNaN(v)){ pen = false; continue; }
+      var x = X(i), y = Y(v);
+      if(!pen){ g.moveTo(x, y); pen = true; }
+      else if(l.step){ g.lineTo(x, prevY); g.lineTo(x, y); }
+      else g.lineTo(x, y);
+      prevY = y;
+    }
+    g.stroke(); g.setLineDash([]);
+  });
+}
+function noData(g,w,h,text){
+  g.fillStyle = css("--ink3"); g.font = "11px "+css("--sans");
+  g.textAlign="center"; g.textBaseline="middle";
+  g.fillText(text || "no data", w/2, h/2);
+}
+function legend(id, chartId, series){
+  var h = series.map(function(s){
+    var off = hidden[chartId+"|"+s.label] ? " off" : "";
+    var sw = s.stack ? '<i style="background:'+s.color+'"></i>' :
+             (s.dash ? '<i class="dash" style="border-color:'+s.color+';width:14px"></i>' : '<i class="line" style="background:'+s.color+';width:14px"></i>');
+    return '<span class="'+off.trim()+'" data-chart="'+chartId+'" data-label="'+esc(s.label)+'" role="button" tabindex="0">'+sw+esc(s.label)+'</span>';
+  }).join("");
+  setHTML(id, h);
+}
+/* hover crosshair with every series' value at that bucket, and drag or click to zoom */
+function chartIndex(id, ev){
+  var c = CHARTS[id]; if(!c || c.n<1) return -1;
+  var r = $(id).getBoundingClientRect(), x = ev.clientX - r.left;
+  var i = c.n>1 ? Math.round((x - c.pad.l)/c.iw*(c.n-1)) : 0;
+  return Math.max(0, Math.min(c.n-1, i));
+}
+function chartX(id, i){ var c = CHARTS[id]; return c.n>1 ? c.pad.l + c.iw*(i/(c.n-1)) : c.pad.l + c.iw/2; }
+/* the stacked band under the pointer at bucket i, if it can be listed (it has a filter); a band
+   thinner than 4 px takes 2 px more above it so it can still be hit */
+function bandAt(id, ev, i){
+  var c = CHARTS[id]; if(!c || !c.stack || !c.stack.length || i<0) return null;
+  var y = ev.clientY - $(id).getBoundingClientRect().top, base = 0;
+  function Y(v){ return c.pad.t + c.ih*(1 - Math.max(0, Math.min(1, v/c.max))); }
+  for(var k=0;k<c.stack.length;k++){
+    var s = c.stack[k], v = Math.max(0, s.v[i]||0);
+    if(v>0 && s.filt){
+      var yb = Y(base), yt = Y(base+v);
+      if(y<=yb && y>=yt - (yb-yt<4 ? 2 : 0)) return s;
+    }
+    base += v;
+  }
+  return null;
+}
+/* the bucket's own span, clipped to the range asked for (the grid's first and last buckets can
+   reach outside it), in seconds to the millisecond */
+function bucketSpan(t0){
+  var r = S.range, a = Math.max(t0*1000, r.fromMs!==undefined ? r.fromMs : r.from*1000),
+      z = Math.min((t0+r.bucket)*1000, r.toMs!==undefined ? r.toMs : r.to*1000);
+  return [msSec(a), msSec(z)];
+}
+function msSec(ms){ return Math.round(ms)/1000; }
+/* keep only the band's calls over the range shown (the range itself never changes on a click): its
+   clauses replace any on the same fields; a second click on a band already in the filter takes it off */
+function bandOn(band){ return band.filt.add.every(hasClause); }
+function bandClick(band){
+  var keep = fTokens(view.filter).filter(function(t){ return band.filt.drop.indexOf(fClause(t).field)<0; });
+  view.filter = (bandOn(band) ? keep : keep.concat(band.filt.add)).join(" ");
+  $("filter").value = view.filter;
+  view.page = 0;
+  load();
+}
+/* " (2.3% of answered)" when the chart has a per-bucket base and the bucket has any */
+function bucketShare(spec, v, i){
+  if(!spec.pctOf || v===null || v===undefined) return "";
+  var base = spec.pctOf[i];
+  return base>0 ? " ("+pct(v, base)+" "+spec.pctLabel+")" : "";
+}
+function hoverText(id, i, band){
+  var c = CHARTS[id], t0 = c.t[i], b = S.range.bucket;
+  var head = (b>=86400 ? fmtD(t0)+" "+dayName(t0) : fmtD(t0)+" "+fmtT(t0)+" - "+fmtT(t0+b)) + " " + tz();
+  var lines = [head];
+  var fmtv = c.spec.fmtTip || c.spec.fmt || function(v){ return nice(v); };
+  var tot = 0, anyStack = false;
+  c.spec.series.forEach(function(s){
+    if(hidden[id+"|"+s.label]) return;
+    var v = s.v[i];
+    if(s.stack){ anyStack = true; tot += (v||0); }
+    lines.push(s.label+": "+(v===null||v===undefined||isNaN(v) ? "-" : fmtv(v)+bucketShare(c.spec, s.stack ? v : null, i)));
+  });
+  if(anyStack && c.spec.totalLabel) lines.push(c.spec.totalLabel+": "+fmtv(tot)+bucketShare(c.spec, tot, i));
+  if(STATIC) return lines.join("\n");
+  if(band) lines.push(bandOn(band) ? "click: take "+band.label+" off the filter (back to every call)"
+                                   : "click: only "+band.label+" calls, same range ("+band.filt.add.join(" ")+")", "drag to zoom");
+  else lines.push("drag to zoom"+(c.stack && c.stack.some(function(s){ return s.filt; }) ? ", click a band for its calls only" : ""));
+  return lines.join("\n");
+}
+var drag = null;
+function brush(id){
+  var cv = $(id), wrap = cv.parentNode;
+  if(cv._wired) return; cv._wired = true;
+  var xh = document.createElement("div"); xh.className = "xh"; wrap.appendChild(xh);
+  var br = document.createElement("div"); br.className = "brush"; wrap.appendChild(br);
+  cv.addEventListener("mousemove", function(ev){
+    var c = CHARTS[id]; if(!c || !S) return;
+    var i = chartIndex(id, ev); if(i<0) return;
+    var x = chartX(id, i);
+    xh.style.display = "block"; xh.style.left = x+"px"; xh.style.height = c.ih+"px";
+    var band = drag ? null : bandAt(id, ev, i);
+    cv.setAttribute("data-tip", hoverText(id, i, band));
+    cv.style.cursor = band && !STATIC ? "pointer" : "";
+    if(drag && drag.id===id){
+      var a = Math.min(drag.x, ev.clientX - cv.getBoundingClientRect().left), b2 = Math.max(drag.x, ev.clientX - cv.getBoundingClientRect().left);
+      br.style.display = "block"; br.style.left = a+"px"; br.style.width = (b2-a)+"px"; br.style.height = c.ih+"px";
+    }
+  });
+  cv.addEventListener("mouseleave", function(){ xh.style.display = "none"; cv.removeAttribute("data-tip"); });
+  cv.addEventListener("mousedown", function(ev){
+    if(STATIC || ev.button!==0) return;
+    var i = chartIndex(id, ev);
+    drag = {id:id, x:ev.clientX - cv.getBoundingClientRect().left, i:i, band:bandAt(id, ev, i)};
+    ev.preventDefault();
+  });
+  window.addEventListener("mouseup", function(ev){
+    if(!drag || drag.id!==id) return;
+    var d = drag; drag = null; br.style.display = "none";
+    var c = CHARTS[id]; if(!c) return;
+    var j = chartIndex(id, ev);
+    var a = Math.min(d.i, j), z = Math.max(d.i, j);
+    /* only a drag zooms; a click filters to the band under it, or does nothing off the bands */
+    if(Math.abs((ev.clientX - cv.getBoundingClientRect().left) - d.x) < 6){ if(d.band) bandClick(d.band); return; }
+    if(a<0) return;
+    var s0 = bucketSpan(c.t[a]), s1 = bucketSpan(c.t[z]);
+    zoomTo(s0[0], s1[1]);
+  });
+}
+
+/* ---------------------------------------------------------------- loading */
+var SLOTS = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7","--s8"];
+function rangeParams(){
+  var p = [];
+  if(view.from!==null && view.to!==null){ p.push("from="+view.from, "to="+view.to); }
+  else if(view.rel==="all") p.push("range=all");
+  else if(view.rel==="1h") p.push("last=3600");
+  else if(view.rel==="24h") p.push("last=86400");
+  else if(view.rel==="7d") p.push("last=604800");
+  else if(view.rel==="today" || view.rel==="prev"){
+    var last = S && S.range ? S.range.last : null;
+    if(last===null) p.push("last=86400");
+    else { var day = Math.floor(last/86400)*86400; if(view.rel==="prev") day -= 86400; p.push("from="+day, "to="+(day+86400)); }
+  }
+  if(view.bucket && view.bucket!=="auto") p.push("bucket="+encodeURIComponent(view.bucket));
+  if(view.filter) p.push("filter="+encodeURIComponent(view.filter));
+  if(view.src && view.src!=="-1") p.push("src="+encodeURIComponent(view.src));
+  if(view.zone && view.zone!=="cube") p.push("zone="+encodeURIComponent(view.zone));
+  return p.join("&");
+}
+function zoneParam(){ return view.zone && view.zone!=="cube" ? "&zone="+encodeURIComponent(view.zone) : ""; }
+function busy(on, text){
+  inflight += on ? 1 : -1; if(inflight<0) inflight = 0;
+  $("busy").hidden = inflight===0;
+  if(text) $("busyText").textContent = text;
+  document.body.classList.toggle("loading", inflight>0);
+}
+function load(quiet){
+  if(STATIC) return;
+  var q = rangeParams();
+  /* every request carries the generation it was asked in; an answer that comes back after a newer
+     selection was asked for is dropped, so a slow reply can never paint over a newer view */
+  var my = ++stateGen;
+  if(!quiet) busy(true, "reading calls");
+  fetch("api/state?"+q, {cache:"no-store"}).then(function(r){
+    if(!r.ok) return r.text().then(function(t){ throw new Error(t); });
+    return r.text();
+  }).then(function(text){
+    lastOk = Date.now();
+    if(!quiet) busy(false);
+    if(my !== stateGen) return;
+    var next = JSON.parse(text);
+    /* a live poll with no new records changes only the status line: keep the page as it is */
+    var key = next.version+"|"+next.range.from+"|"+next.range.to+"|"+next.range.bucket+"|"+next.filter.text+"|"+next.range.src+"|"+(next.zone ? next.zone.id : "");
+    if(key===lastStateText){ $("hdrStatus").textContent = next.status||""; return; }
+    lastStateText = key;
+    S = next;
+    renderAll();
+    loadList();
+    if(!!timer !== liveOn()) schedule();
+  }).catch(function(e){
+    if(!quiet) busy(false);
+    if(my !== stateGen) return;
+    $("hdrStatus").textContent = "cannot reach CubeScope: "+e.message;
+    $("dot").className = "dot stale";
+  });
+}
+function loadList(){
+  if(STATIC) return;
+  var q = rangeParams()+"&sort="+view.sort+"&desc="+(view.desc?1:0)+"&page="+view.page+"&size=200";
+  var my = ++listGen;
+  fetch("api/calls?"+q, {cache:"no-store"}).then(function(r){ return r.json(); }).then(function(j){
+    if(my !== listGen) return;              /* a newer list was asked for meanwhile */
+    CALLS = j; renderList();
+  });
+}
+/* Live: the user's own choice once they have pressed the button (view.live true/false, kept as
+   cs-live); until then (null) it follows the server, which is on whenever it reads new records */
+function liveOn(){ return !STATIC && (view.live!==null ? view.live : !!(S && S.following)); }
+function schedule(){
+  if(timer){ clearInterval(timer); timer = null; }
+  if(liveOn()) timer = setInterval(function(){ load(true); }, 5000);
+}
+function zoomTo(from, to){
+  zoomStack.push({rel:view.rel, from:view.from, to:view.to});
+  view.from = from; view.to = to; view.rel = null; view.page = 0;
+  save(); load();
+}
+
+/* ---------------------------------------------------------------- render */
+function renderAll(){
+  _pal = {};
+  renderHeader();
+  renderControls();
+  renderTiles();
+  renderFind();
+  renderCharts();
+  renderLanes();
+  renderConfigs();
+  renderTables();
+  renderClock();
+  renderHealth();
+  tipRefresh();
+}
+function renderHeader(){
+  var names = S.sources.map(function(s){ return s.name; }).join(", ");
+  $("hdrSrc").textContent = names ? names : "no CUBE found";
+  var r = S.range;
+  $("hdrSpan").textContent = r.first>0 ? "records "+fmtDT(r.first)+" to "+fmtDT(r.last)+" "+tz() : "";
+  var st = S.status || "";
+  $("hdrStatus").textContent = st;
+  $("dot").className = "dot" + (liveOn() ? "" : " off");
+  $("foot").textContent = "CubeScope · state version "+S.version+" · query "+Math.round(S.queryMs)+" ms";
+}
+function renderControls(){
+  var r = S.range;
+  if(document.activeElement!==$("from")) $("from").value = localInput(r.from);
+  if(document.activeElement!==$("to")) $("to").value = localInput(r.to);
+  Array.prototype.forEach.call(document.querySelectorAll("[data-rel]"), function(b){
+    b.classList.toggle("on", view.from===null && b.getAttribute("data-rel")===view.rel);
+  });
+  $("bucket").value = view.bucket || "auto";
+  if(S.zone && !$("zone").options.length)
+    setHTML("zone", S.zone.choices.map(function(z){ return '<option value="'+esc(z.id)+'">'+esc(z.name)+'</option>'; }).join(""));
+  if(S.zone){
+    if(!Array.prototype.some.call($("zone").options, function(o){ return o.value===S.zone.id; }))
+      $("zone").insertAdjacentHTML("beforeend", '<option value="'+esc(S.zone.id)+'">'+esc(S.zone.name)+'</option>');
+    $("zone").value = S.zone.id;
+  }
+  if(document.activeElement!==$("filter")) $("filter").value = view.filter;
+  var fe = S.filter.error || "";
+  $("ferr").textContent = fe ? "not applied, every call is shown: "+fe : "";
+  $("filter").classList.toggle("bad", !!fe);
+  rememberFilter(fe ? "" : (S.filter.text || ""));
+  $("live").classList.toggle("on", liveOn());
+  $("back").hidden = zoomStack.length===0;
+  var b = r.bucket, bt = b>=86400 ? "1 day" : (b>=3600 ? (b/3600)+" h" : (b/60)+" min");
+  setHTML("crumbs", esc(fmtDT(r.from)+" to "+fmtDT(r.to)+" "+tz()+" · "+n0(r.n)+" points of "+bt) +
+          (view.filter ? " · filter: "+esc(view.filter) : "") +
+          (S.zone && S.zone.notConverted.length ? ' · <span class="critt">left on their own clock (nothing to convert by): '+esc(S.zone.notConverted.join(", "))+'</span>' : ''));
+  if(S.sources.length>1){
+    $("srcGrp").hidden = false;
+    var opts = '<option value="-1">all</option>' + S.sources.map(function(s){ return '<option value="'+s.i+'">'+esc(s.name)+'</option>'; }).join("");
+    setHTML("src", opts);
+    $("src").value = view.src;
+  }
+  var q = rangeParams();
+  $("csv").href = "csv?"+q; $("report").href = "report?"+q;
+}
+/* f = [fields, clause]: clicking the tile makes that clause the filter's only one for those fields */
+function tile(k, v, s, cls, tk, f){
+  var click = f && !STATIC, on = click && hasClause(f[1]);
+  return '<div class="tile'+(click ? " click"+(on ? " on" : "") : "")+'"'+tipk(tk)+
+         (click ? ' tabindex="0" role="button" aria-pressed="'+on+'" aria-label="'+esc(k)+': show only these calls" data-ff="'+f[0]+'" data-fc="'+esc(f[1])+'"' : '')+
+         '><div class="k">'+esc(k)+'</div><div class="v '+(cls||"")+'">'+v+
+         '</div><div class="s">'+esc(s||"")+'</div></div>';
+}
+function renderTiles(){
+  var t = S.tiles, calls = t.calls;
+  var bad = t.media_none + t.media_oneway;
+  var missing = 0; S.health.forEach(function(h){ missing += h.iosMissing||0; });
+  var relN = t.rel_caller + t.rel_called + t.rel_network + t.rel_tie;
+  var failRate = calls>0 ? (t.failed+t.rejected)/calls : 0;
+  setHTML("tiles",
+    tile("Calls", n0(calls), n0(t.legs)+" legs", "", "tile.calls") +
+    tile("Answered", pct(t.answered, calls), n0(t.answered)+" calls", "", "tile.answered", ["result", "result=answered"]) +
+    tile("Avg talk", dur(t.acdMs), "median "+dur(t.talkP50)+", p95 "+dur(t.talkP95), "", "tile.talk") +
+    tile("Canceled while ringing", n0(t.abandoned), pct(t.abandoned, calls)+" of calls", "", "tile.abandoned", ["result", "result=abandoned"]) +
+    tile("No answer", n0(t.noanswer), pct(t.noanswer, calls)+" of calls", "", "tile.noanswer", ["result", "result=noanswer"]) +
+    tile("Busy", n0(t.busy), pct(t.busy, calls)+" of calls", "", "tile.busy", ["result", "result=busy"]) +
+    tile("Rejected", n0(t.rejected), (t.legLess>0 ? n0(t.legLess)+" with no accounting" : pct(t.rejected, calls)+" of calls"), t.rejected>0?"warn":"", "tile.rejected", ["result", "result=rejected"]) +
+    tile("Failed", n0(t.failed), pct(t.failed, calls)+" of calls", failRate>0.02?"crit":(t.failed>0?"warn":""), "tile.failed", ["result", "result=failed"]) +
+    tile("No / one-way media", n0(bad), pct(bad, t.answered)+" of answered: "+n0(t.media_none)+" none, "+n0(t.media_oneway)+" one-way", bad>0?"warn":"", "tile.media", ["media,audio", "media=bad"]) +
+    tile("Low packet rate", n0(t.media_lowrate), pct(t.media_lowrate, t.answered)+" of "+n0(t.answered)+" answered", "", "tile.lowrate", ["media,audio", "media=lowrate"]) +
+    tile("Transfers", n0(t.transfers), pct(t.withTransfer, calls)+" of calls", "", "tile.xfer") +
+    tile("Answer to transfer", dur(t.a2tP50), t.a2tN>0 ? "p95 "+dur(t.a2tP95)+" over "+n0(t.a2tN) : "no transfers", "", "tile.a2t") +
+    tile("Peak concurrent", n0(t.peakCalls), t.peakCalls>0 ? n0(t.peakLegs)+" legs · "+fmtDT(t.peakCallsAt) : "", "", "tile.peak") +
+    tile("Released by caller", pct(t.rel_caller, relN), "called "+pct(t.rel_called, relN)+", network "+pct(t.rel_network, relN), "", "tile.release", ["released", "released=caller"]) +
+    tile("Messages missing", n0(missing), missing>0 ? "lost in transit or filtered" : "none by sequence number", missing>0?"warn":"", "tile.feed"));
+}
+function col(i){ return css(SLOTS[i]); }
+function resFilt(w){ return {drop:["result"], add:["result="+w]}; }
+function renderCharts(){
+  var s = S.series, r = s.result, calls = S.tiles.calls;
+  var lab = {answered:"Answered", abandoned:"Canceled while ringing", noanswer:"No answer", busy:"Busy", rejected:"Rejected", failed:"Failed"};
+  /* each result keeps its slot whatever else is hidden */
+  var resSeries = [
+    {label:lab.answered, color:col(0), v:r.answered, stack:true, filt:resFilt("answered")},
+    {label:lab.abandoned, color:col(1), v:r.abandoned, stack:true, filt:resFilt("abandoned")},
+    {label:lab.noanswer, color:col(2), v:r.noanswer, stack:true, filt:resFilt("noanswer")},
+    {label:lab.busy, color:col(3), v:r.busy, stack:true, filt:resFilt("busy")},
+    /* rejected violet and failed red: this order passes the palette validator in both themes
+       (s1 s2 s3 s4 s7 s8); magenta beside red did not, for normal vision either */
+    {label:lab.rejected, color:col(6), v:r.rejected, stack:true, filt:resFilt("rejected")},
+    {label:lab.failed, color:col(7), v:r.failed, stack:true, filt:resFilt("failed")}];
+  if(S.tiles.unknown>0) resSeries.push({label:"Unknown", color:css("--other"), v:r.unknown, stack:true, filt:resFilt("unknown")});
+  var callSpec = {series:resSeries, totalLabel:"Calls", fmt:function(v){ return nice(v); }, fmtTip:n0};
+  legend("lgCalls", "cCalls", resSeries);
+  tsChart("cCalls", 210, callSpec);
+  $("subCalls").textContent = n0(calls)+" calls, "+pct(S.tiles.answered, calls)+" answered · per "+bucketText();
+
+  var asr = [{label:"Answered %", color:col(0), v:s.asr}];
+  legend("lgAsr", "cAsr", asr);
+  tsChart("cAsr", 150, {series:asr, cap:100, max:100, fmt:function(v){ return v.toFixed(0)+"%"; }, fmtTip:function(v){ return v.toFixed(1)+"%"; }});
+  $("subAsr").textContent = "share of calls answered in each bucket";
+
+  var lic = null;
+  S.lanes.forEach(function(l){ if(l.kind==="licence" && l.values) lic = carry(l.values); });
+  var conc = [{label:"Calls up at once", color:col(0), v:s.concCalls}, {label:"Legs up at once", color:col(1), v:s.concLegs}];
+  if(lic) conc.push({label:"Licences requested", color:css("--ref"), v:lic, dash:true, step:true});
+  legend("lgConc", "cConc", conc);
+  tsChart("cConc", 150, {series:conc, fmtTip:n0});
+  $("subConc").textContent = "peak "+n0(S.tiles.peakCalls)+" calls, "+n0(S.tiles.peakLegs)+" legs";
+
+  var ring = [{label:"Median", color:col(0), v:s.ringP50}, {label:"95th percentile", color:col(1), v:s.ringP95, dash:true}];
+  legend("lgRing", "cRing", ring);
+  tsChart("cRing", 150, {series:ring, fmt:secs, fmtTip:dur});
+  $("subRing").textContent = "median "+dur(S.tiles.ringP50)+", p95 "+dur(S.tiles.ringP95)+" over the range";
+
+  var talk = [{label:"Median", color:col(0), v:s.talkP50}, {label:"95th percentile", color:col(1), v:s.talkP95, dash:true},
+              {label:"Mean", color:col(2), v:s.acd}];
+  legend("lgTalk", "cTalk", talk);
+  tsChart("cTalk", 150, {series:talk, fmt:secs, fmtTip:dur});
+  $("subTalk").textContent = "mean "+dur(S.tiles.acdMs)+", median "+dur(S.tiles.talkP50);
+
+  /* a cause band is the unanswered calls with that deciding cause; "Other causes" is every cause not drawn */
+  var cs = s.causes.map(function(c, i){
+    var others = s.causes.filter(function(o){ return o!==c; }).map(function(o){ return o.cause; });
+    var add = ["result=unanswered", c.cause<0 ? (others.length ? "cause!="+others.join(",") : "") : "cause="+c.cause].filter(Boolean);
+    return {label:(c.cause<0 ? "Other causes" : c.cause+" "+c.name), color:(c.cause<0 ? css("--other") : col(i)), v:c.v, stack:true,
+            filt:{drop:["result","cause","legcause"], add:add}};
+  });
+  legend("lgCauses", "cCauses", cs);
+  tsChart("cCauses", 150, {series:cs, totalLabel:"Not answered", fmtTip:n0});
+  $("subCauses").textContent = n0(S.tiles.unanswered)+" calls not answered";
+
+  /* orange, violet, yellow: red beside orange failed the colour-blind check */
+  var md = [{label:"One-way", color:col(1), v:s.oneWay, stack:true, filt:{drop:["media"], add:["media=oneway"]}},
+            {label:"No media", color:col(6), v:s.noMedia, stack:true, filt:{drop:["media"], add:["media=none"]}},
+            {label:"Low packet rate", color:col(3), v:s.lowRate, stack:true, filt:{drop:["media"], add:["media=lowrate"]}}];
+  legend("lgMedia", "cMedia", md);
+  tsChart("cMedia", 150, {series:md, totalLabel:"Calls", fmtTip:n0, pctOf:s.result.answered, pctLabel:"of answered"});
+  var ta = S.tiles.answered;
+  $("subMedia").textContent = n0(S.tiles.media_oneway)+" one-way ("+pct(S.tiles.media_oneway, ta)+"), "+n0(S.tiles.media_none)+" none ("+pct(S.tiles.media_none, ta)+"), "+
+    n0(S.tiles.media_lowrate)+" low rate ("+pct(S.tiles.media_lowrate, ta)+") of "+n0(ta)+" answered calls";
+
+  /* the band counts transfers; its calls are the ones with at least one */
+  var xf = [{label:"Transfers", color:col(0), v:s.transfers, stack:true, filt:{drop:["transfers"], add:["transfers>=1"]}}];
+  legend("lgXfer", "cXfer", xf);
+  tsChart("cXfer", 150, {series:xf, fmtTip:n0});
+  $("subXfer").textContent = n0(S.tiles.transfers)+" transfers on "+n0(S.tiles.withTransfer)+" calls";
+
+  var a2t = [{label:"Median", color:col(0), v:s.a2tP50}, {label:"95th percentile", color:col(1), v:s.a2tP95, dash:true}];
+  legend("lgA2t", "cA2t", a2t);
+  tsChart("cA2t", 150, {series:a2t, fmt:secs, fmtTip:dur});
+  $("subA2t").textContent = S.tiles.a2tN>0 ? "median "+dur(S.tiles.a2tP50)+", p95 "+dur(S.tiles.a2tP95)+" over "+n0(S.tiles.a2tN)+" calls" : "no transfers in the range";
+  ["cCalls","cAsr","cConc","cRing","cTalk","cCauses","cMedia","cXfer","cA2t"].forEach(brush);
+}
+function secs(ms){ if(!ms) return "0"; return ms>=60000 ? (ms/60000).toFixed(ms>=600000?0:1)+"m" : (ms/1000).toFixed(ms>=10000?0:1)+"s"; }
+function carry(a){ var out = [], last = null; for(var i=0;i<a.length;i++){ if(a[i]!==null && !isNaN(a[i])) last = a[i]; out.push(last); } return out; }
+function bucketText(){ var b = S.range.bucket; return b>=86400 ? "day" : (b>=3600 ? (b/3600)+" h" : (b/60)+" min"); }
+
+/* ---------------------------------------------------------------- events lanes */
+var LANE_NAMES = {"dump":"Failure traces", "iec":"Internal errors", "tls-fail":"TLS failures", "tls":"TLS connections",
+  "sip-state":"SIP state events", "sip":"Other SIP", "licence":"Licence requests", "login":"Logins", "config":"Config changes", "other":"Other"};
+var LANES = null;
+function renderLanes(){
+  var cv = $("cLanes"), lanes = S.lanes, n = S.series.t.length;
+  var rowH = 18, padL = 130, padR = 10;
+  var p = prep(cv, Math.max(30, lanes.length*rowH + 6)), g = p.g, w = p.w;
+  var iw = w - padL - padR;
+  LANES = {padL:padL, iw:iw, rowH:rowH, n:n};
+  if(!lanes.length){ noData(g, w, 30, "no other syslog messages in the range"); setHTML("subLanes", ""); return; }
+  var total = 0;
+  lanes.forEach(function(l, r){
+    total += l.count;
+    var y = r*rowH + 2, max = 0, i;
+    for(i=0;i<n;i++) if(l.v[i]>max) max = l.v[i];
+    g.fillStyle = css("--ink2"); g.font = "11px "+css("--sans"); g.textAlign = "right"; g.textBaseline = "middle";
+    g.fillText((LANE_NAMES[l.kind]||l.kind)+" "+n0(l.count), padL-8, y+rowH/2);
+    g.fillStyle = css("--surf2"); g.fillRect(padL, y+1, iw, rowH-3);
+    var crit = l.kind==="dump" || l.kind==="iec";
+    for(i=0;i<n;i++){
+      var v = l.v[i]; if(!v) continue;
+      var x0 = padL + iw*i/n, x1 = padL + iw*(i+1)/n;
+      g.globalAlpha = 0.3 + 0.7*Math.sqrt(v/max);
+      g.fillStyle = crit ? css("--crit") : css("--accent");
+      g.fillRect(x0, y+1, Math.max(1.5, x1-x0), rowH-3);
+    }
+    g.globalAlpha = 1;
+  });
+  setHTML("subLanes", n0(total)+" messages besides the accounting; click a cell to list them");
+  if(!cv._wired){
+    cv._wired = true;
+    cv.addEventListener("mousemove", function(ev){
+      var hit = laneHit(ev); if(!hit){ cv.removeAttribute("data-tip"); return; }
+      var t0 = S.series.t[hit.i], b = S.range.bucket;
+      cv.setAttribute("data-tip", (LANE_NAMES[hit.l.kind]||hit.l.kind)+": "+n0(hit.l.v[hit.i])+" in "+fmtD(t0)+" "+fmtT(t0)+" - "+fmtT(t0+b)+
+        "\n"+(TIPS["lane."+hit.l.kind.replace("-","")]||"")+"\nclick to list them");
+    });
+    cv.addEventListener("click", function(ev){
+      var hit = laneHit(ev); if(!hit) return;
+      var t0 = S.series.t[hit.i], b = S.range.bucket;
+      showLaneEvents(hit.l.kind, t0, t0+b);
+    });
+  }
+}
+function laneHit(ev){
+  if(!LANES || !S) return null;
+  var r = $("cLanes").getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+  var row = Math.floor((y-2)/LANES.rowH), l = S.lanes[row];
+  if(!l || x < LANES.padL) return null;
+  var i = Math.floor((x - LANES.padL)/LANES.iw*LANES.n);
+  if(i<0 || i>=LANES.n) return null;
+  /* cells can be a pixel wide: an empty one takes the nearest cell with messages, two either side */
+  if(!l.v[i]) for(var d=1; d<=2; d++){
+    if(i-d>=0 && l.v[i-d]){ i -= d; break; }
+    if(i+d<LANES.n && l.v[i+d]){ i += d; break; }
+  }
+  return {l:l, i:i};
+}
+function showLaneEvents(kind, from, to){
+  var box = $("laneBox");
+  if(STATIC){
+    var l = S.lanes.filter(function(x){ return x.kind===kind; })[0];
+    var items = (l ? l.samples : []).filter(function(e){ return e.t>=from && e.t<to; });
+    box.innerHTML = laneList(kind, from, to, items, false);
+    return;
+  }
+  box.innerHTML = '<span class="hint">loading...</span>';
+  var q = "from="+from+"&to="+to+"&kind="+encodeURIComponent(kind)+(view.src!=="-1" ? "&src="+view.src : "")+zoneParam();
+  fetch("api/events?"+q, {cache:"no-store"}).then(function(r){ return r.json(); }).then(function(j){
+    box.innerHTML = laneList(kind, from, to, j.items, j.more);
+  });
+}
+function laneList(kind, from, to, items, more){
+  var h = '<b>'+esc(LANE_NAMES[kind]||kind)+'</b> <span class="hint">'+fmtDT(from)+' - '+fmtT(to)+' '+tz()+' · '+items.length+(more?"+":"")+' shown</span>';
+  h += '<pre>'+items.map(function(e){ return esc(fmtD(e.t)+" "+fmtTs(e.t)+"  "+(e.m?"%"+e.m+": ":"")+e.x); }).join("\n")+'</pre>';
+  return h;
+}
+
+/* the newest ten configuration changes, whatever the range */
+function renderConfigs(){
+  var rows = S.configChanges || [];
+  setHTML("subConfigs", "last "+(rows.length===10 ? "10" : rows.length)+" configuration change"+(rows.length===1?"":"s")+
+          (view.src!=="-1" ? " on this CUBE" : "")+", from any time, not only the range shown");
+  if(!rows.length){ setHTML("tConfigs", '<div class="hint">none seen</div>'); return; }
+  var many = S.sources.length>1;
+  setHTML("tConfigs", '<table><thead><tr><th class="l">Time '+esc(tz())+'</th>'+(many ? '<th class="l">CUBE</th>' : '')+
+    '<th class="l">Change</th></tr></thead><tbody>'+rows.map(function(e){
+      return '<tr><td class="l">'+esc(fmtD(e.t)+" "+fmtTs(e.t))+(e.own ? ' <span class="muted">(CUBE clock)</span>' : '')+'</td>'+
+        (many ? '<td class="l">'+esc(e.src)+'</td>' : '')+'<td class="l">'+esc((e.m ? "%"+e.m+": " : "")+e.x)+'</td></tr>';
+    }).join("")+'</tbody></table>');
+}
+
+/* ---------------------------------------------------------------- tables */
+function numCell(field, n){
+  if(!n) return '<span class="muted">(none)</span>';
+  return '<span class="nb" data-f="'+field+'" data-n="'+esc(n)+'">'+esc(n)+'</span>';
+}
+/* a count with its share of a whole, the share in grey */
+function share(n, of){ return n0(n)+(of>0 ? '<span class="pc">'+pct(n, of)+'</span>' : ''); }
+/* all = every call in the range; the last row adds up the numbers shown */
+function numTable(rows, field, all, label){
+  if(!rows.length) return '<div class="hint">nothing in the range</div>';
+  var h = '<table><thead><tr><th class="l">'+(label||"Number")+'</th><th'+tipk("col.ncalls")+'>Calls</th><th>Answered</th><th>Avg talk</th>'+
+          '<th'+tipk("col.nunans")+'>Not answered</th><th'+tipk("col.nbad")+'>Bad media</th></tr></thead><tbody>';
+  var t = {calls:0, ans:0, talk:0, bad:0};
+  rows.forEach(function(r){
+    t.calls += r.calls; t.ans += r.ans; t.bad += r.noMedia;
+    if(r.ans>0 && r.acdMs!==null && !isNaN(r.acdMs)) t.talk += r.acdMs*r.ans;
+    h += '<tr><td class="l num">'+numCell(field, r.n)+'</td><td>'+share(r.calls, all)+'</td><td>'+pct(r.ans, r.calls)+'</td><td>'+dur(r.acdMs)+
+         '</td><td>'+share(r.calls-r.ans, r.calls)+'</td><td>'+(r.noMedia ? share(r.noMedia, r.ans) : '<span class="muted">0</span>')+'</td></tr>';
+  });
+  h += '</tbody><tfoot><tr'+tipk("row.ntotal")+'><td class="l">These '+rows.length+'</td><td>'+share(t.calls, all)+'</td><td>'+pct(t.ans, t.calls)+'</td><td>'+
+       dur(t.ans>0 ? t.talk/t.ans : NaN)+'</td><td>'+share(t.calls-t.ans, t.calls)+'</td><td>'+share(t.bad, t.ans)+'</td></tr></tfoot>';
+  return h + '</table>';
+}
+/* calls stopped while they rang: a bar per second the call ran before the cancel (dialer and caller
+   stacked), then the piles the server found; a bar or a count lists those calls */
+function renderCanceled(){
+  var k = S.canceled;
+  if(!k){ setHTML("tCanceled", ""); setHTML("cStrip", ""); return; }
+  var td = 0, tc = 0, max = 1, last = k.maxSec;
+  k.dialer.forEach(function(v, i){ td += v; tc += k.caller[i]; max = Math.max(max, v + k.caller[i]); });
+  $("subCanceled").textContent = n0(td+tc)+" calls stopped before anyone answered, "+pct(td+tc, S.tiles.calls)+" of calls: "+
+    n0(td)+" by the dialer, "+n0(tc)+" by the caller"+(STATIC || td+tc===0 ? "" : " · click a bar or a count to list those calls");
+  if(td+tc===0){ setHTML("cStrip", ""); setHTML("tCanceled", '<div class="hint">nothing in the range</div>'); return; }
+  var h = '<div class="ckey"><span><i style="background:var(--s2)"></i>dialer gave up</span><span><i style="background:var(--s1)"></i>caller hung up</span></div>'+
+          '<div class="cstrip"'+tipk("chart.canceled")+'>';
+  for(var i=0;i<=last;i++){
+    var d = k.dialer[i], c = k.caller[i];
+    var t = secLabel(i, last)+": "+n0(d)+" by the dialer, "+n0(c)+" by the caller";
+    h += '<i'+(STATIC || d+c===0 ? '' : ' data-cw="all" data-clo="'+i+'" data-chi="'+(i<last ? i+1 : 0)+'"')+' title="'+t+'">'+
+         (c ? '<b style="height:'+Math.max(1, Math.round(64*c/max))+'px;background:var(--s1)"></b>' : '')+
+         (d ? '<b style="height:'+Math.max(1, Math.round(64*d/max))+'px;background:var(--s2)"></b>' : '')+'</i>';
+  }
+  h += '</div><div class="caxis">';
+  for(var s=0;s<=last;s+=30) h += '<span style="left:'+(100*(s+0.5)/(last+1)).toFixed(2)+'%">'+(s<last ? s+" s" : s+"+ s")+'</span>';
+  setHTML("cStrip", h+'</div>');
+  var t2 = '<table><thead><tr><th class="l"'+tipk("col.cwho")+'>Stopped by</th><th class="l"'+tipk("col.cwhen")+'>Ran for, then canceled</th>'+
+           '<th'+tipk("col.ccalls")+'>Calls</th><th'+tipk("col.cside")+'>Of that side</th></tr></thead><tbody>';
+  t2 += pileRows("dialer", "Dialer gave up", k.dialerPiles, td) + pileRows("caller", "Caller hung up", k.callerPiles, tc);
+  t2 += '</tbody><tfoot><tr><td class="l">All</td><td class="l">any length</td><td>'+cancelCount("all", td+tc, 0, 0)+'</td><td></td></tr></tfoot></table>';
+  setHTML("tCanceled", t2);
+}
+function secLabel(i, last){ return i===0 ? "under 1 s" : i>=last ? last+" s or more" : i+" s"; }
+/* the piles of one side, the rest of its cancels, and the side's total */
+function pileRows(who, name, piles, total){
+  if(!total) return '<tr><td class="l">'+name+'</td><td class="l muted">none</td><td><span class="muted">0</span></td><td></td></tr>';
+  var h = '', piled = 0;
+  piles.forEach(function(p, i){
+    var from = p[0], to = p[1], n = p[2];
+    piled += n;
+    var lab = to===0 ? from+" s or more" : (from===0 ? "under "+to+" s" : from+" to "+to+" s");
+    h += '<tr><td class="l">'+(i===0 ? name : '')+'</td><td class="l">'+lab+'</td><td>'+cancelCount(who, n, from, to)+'</td><td>'+pct(n, total)+'</td></tr>';
+  });
+  if(total>piled) h += '<tr><td class="l">'+(piles.length ? '' : name)+'</td><td class="l muted">spread over other lengths</td><td>'+n0(total-piled)+
+                       '</td><td>'+pct(total-piled, total)+'</td></tr>';
+  return h + '<tr class="csum"><td class="l"></td><td class="l">all lengths</td><td>'+cancelCount(who, total, 0, 0)+'</td><td>100%</td></tr>';
+}
+function cancelCount(who, n, lo, hi){
+  if(!n) return '<span class="muted">0</span>';
+  return STATIC ? n0(n) : '<span class="cnum" role="button" tabindex="0" data-cw="'+who+'" data-clo="'+lo+'" data-chi="'+hi+'">'+n0(n)+'</span>';
+}
+/* filter to canceled calls of one length range (whole seconds, hi 0: no upper end) stopped by one side
+   ("all": either), keeping the user's other clauses */
+function cancelFilter(who, lo, hi){
+  var keep = fTokens(view.filter).filter(function(t){
+    var c = fClause(t);
+    if(c.field==="result" || c.field==="dur") return false;
+    return !(c.field==="has" && c.value.toLowerCase()==="dialer");
+  });
+  keep.push(who==="dialer" ? "result=dialercanceled" : who==="caller" ? "result=callercanceled" : "result=abandoned");
+  if(lo>0) keep.push("dur>="+lo);
+  if(hi>0) keep.push("dur<"+hi);
+  view.filter = keep.join(" "); view.page = 0;
+  $("filter").value = view.filter;
+  load();
+}
+/* only when CubeScope reads a CUBE's call record files: a syslog feed never says these things */
+function renderCubeTables(t, calls){
+  [["pDialPeer","tDialPeer",t.dialpeer,"dialpeer","Dial-peer"],["pMedia","tMedia",t.mediaip,"mediaip","Far-end address"],["pCodec","tCodec",t.codec,"codec","Codec"]].forEach(function(x){
+    var rows = x[2] || [];
+    $(x[0]).style.display = rows.length ? "" : "none";
+    if(rows.length) setHTML(x[1], numTable(rows, x[3], calls, x[4]));
+  });
+  var k = S.cube, has = (t.dialpeer && t.dialpeer.length) || (t.codec && t.codec.length) || (k && k.qualityCalls);
+  $("pCubeStats").style.display = has && k ? "" : "none";
+  if(!has || !k) return;
+  var h = '<div class="note"><b>Time to ringing:</b> '+(k.alertN ? 'median '+dur(k.alertP50)+', 95th percentile '+dur(k.alertP95)+', '+n0(k.alertN)+' calls' : 'no ringing times in the range')+'</div>';
+  if(k.qualityCalls)
+    h += '<div class="note"><b>Call quality:</b> '+n0(k.qualityCalls)+' calls measured, '+n0(k.qualityPoor)+' poor ('+pct(k.qualityPoor, k.qualityCalls)+')'+
+         (k.mosN ? ' · MOS average '+k.mosAvg.toFixed(2)+', worst '+k.mosWorst.toFixed(2) : ' · no MOS values')+' · highest loss '+Math.max(0, k.lossWorst).toFixed(2)+'%'+(k.jitterWorst>0 ? ' · highest jitter '+k.jitterWorst.toFixed(4) : '')+'</div>';
+  else h += '<div class="note"><b>Call quality:</b> no measured numbers in the range. The CUBE reports them once quality measuring is on.</div>';
+  setHTML("tCubeStats", h);
+}
+function renderTables(){
+  renderCanceled();
+  var t = S.tables, calls = S.tiles.calls;
+  setHTML("tCalled", numTable(t.called, "called", calls));
+  setHTML("tCalling", numTable(t.calling, "calling", calls));
+  setHTML("tConnected", numTable(t.connected, "connected", calls));
+  renderCubeTables(t, calls);
+  if(!t.causes.length){ setHTML("tCauses", '<div class="hint">nothing in the range</div>'); return; }
+  var h = '<table><thead><tr><th>Cause</th><th class="l">Meaning</th><th>Calls</th><th>Share</th><th>Answered</th><th class="l">Not answered as</th><th class="l">Released by</th></tr></thead><tbody>';
+  t.causes.forEach(function(c){
+    var res = [], rel = [];
+    var rn = ["","","canceled ringing","no answer","busy","rejected","failed"];
+    for(var k=2;k<7;k++) if(c.res[k]) res.push(rn[k]+" "+n0(c.res[k]));
+    var ln = ["unknown","caller","called","network","tie"];
+    for(k=1;k<5;k++) if(c.rel[k]) rel.push(ln[k]+" "+n0(c.rel[k]));
+    h += '<tr class="click" data-cause="'+c.cause+'"><td>'+(c.cause<0?"-":c.cause)+'</td><td class="l">'+esc(c.name)+'</td><td>'+n0(c.calls)+
+         '</td><td>'+pct(c.calls, calls)+'</td><td>'+n0(c.answered)+'</td><td class="l">'+esc(res.join(", "))+'</td><td class="l">'+esc(rel.join(", "))+'</td></tr>';
+  });
+  setHTML("tCauses", h + '</tbody></table>');
+}
+
+/* ---------------------------------------------------------------- call list */
+var LIST_COLS = [
+  ["start","Start","l","col.start"], ["dur","Duration","","col.dur"], ["ring","Ring","","col.ring"], ["talk","Talk","","col.talk"],
+  ["calling","Calling","l","col.calling"], ["called","Called","l","col.called"], ["connected","Connected to","l","col.connected"],
+  ["legs","Legs","","col.legs"], ["result","Result","l","col.result"], ["rel","Released by","l","col.rel"],
+  ["cause","Cause","","col.cause"], ["media","Media","l","col.media"], ["feeds","Data","l","col.feeds"], ["a2t","Transfer","","col.xfer"], ["tags","Tags","l","col.tags"]];
+var FEEDS = [[1,"Syslog"],[2,"SFTP"],[4,"Media"]];
+function feedTags(f){
+  return FEEDS.map(function(x){ return '<span class="fd'+((f & x[0]) ? '' : ' off')+'">'+x[1]+'</span>'; }).join("");
+}
+/* packets a second each way on the leg that made the call low-rate or one-way: 20 ms audio is 50 a second */
+function rateText(r){
+  if(r.ptx===undefined) return "";
+  return r.ptx+" / "+r.prx+" pkt/s";
+}
+function rateTip(r){
+  if(r.ptx===undefined) return "";
+  return "On the "+r.pdir+" leg"+(r.ppeer ? " to "+r.ppeer : "")+": "+r.ptx+" packets a second sent and "+r.prx+" received over "+
+         r.psec+" s of talk. Audio in 20 ms packets is 50 a second each way; under 25 on either side reads as low.";
+}
+var RES_LABEL = {answered:"answered", abandoned:"canceled ringing", noanswer:"no answer", busy:"busy", rejected:"rejected", failed:"failed", unknown:"unknown"};
+var MEDIA_LABEL = {none:"no media", oneway:"one-way", lowrate:"low rate", twoway:"two-way", unknown:""};
+function renderList(){
+  if(!CALLS) return;
+  var sortable = !STATIC;
+  var h = '<table><thead><tr>';
+  LIST_COLS.forEach(function(c){
+    var on = view.sort===c[0];
+    h += '<th class="'+(c[2]||"")+(sortable && c[0]!=="rel" && c[0]!=="tags" && c[0]!=="feeds" ? " sort" : "")+'" data-sort="'+c[0]+'"'+tipk(c[3])+'>'+c[1]+
+         (on ? ' <span class="arr">'+(view.desc?"&#9660;":"&#9650;")+'</span>' : '')+'</th>';
+  });
+  h += '</tr></thead><tbody>';
+  CALLS.rows.forEach(function(r){
+    var res = r.result, rl = RES_LABEL[res]||res;
+    var tip = (res==="abandoned" && r.dialer) ? ' data-tip="On a dialer call the caller is the dialer: this is the dialer stopping the ring, its no-answer timeout."' : '';
+    h += '<tr class="click" data-src="'+r.src+'" data-id="'+r.id+'" data-key="'+esc(r.key)+'" tabindex="0">'+
+      '<td class="l num">'+fmtD(Math.floor(r.start/1000))+" "+fmtMs(r.start)+'</td><td>'+dur(r.dur)+'</td><td>'+(r.ring>=0?dur(r.ring):"")+'</td><td>'+(r.talk>0?dur(r.talk):"")+'</td>'+
+      '<td class="l num">'+numCell("calling", r.calling)+'</td><td class="l num">'+numCell("called", r.called)+'</td><td class="l num">'+(r.connected?numCell("connected", r.connected):"")+'</td>'+
+      '<td>'+r.legs+'</td><td class="l"><span class="pill r-'+res+'"'+tip+'>'+esc(rl)+'</span>'+(r.dump?' <span class="muted" title="failure trace">trace</span>':'')+'</td>'+
+      '<td class="l">'+esc(r.rel==="unknown"?"":r.rel)+'</td><td'+(r.cause>=0 && r.causeName ? ' data-tip="'+esc(r.causeName)+'"' : '')+'>'+(r.cause>=0?r.cause:"")+'</td>'+
+      '<td class="l m-'+r.media+'"'+(r.ptx!==undefined ? ' data-tip="'+esc(rateTip(r))+'"' : '')+'>'+esc(MEDIA_LABEL[r.media]||"")+
+        (r.ptx!==undefined ? ' <span class="muted">'+esc(rateText(r))+'</span>' : '')+'</td>'+
+      '<td class="l">'+feedTags(r.feeds||0)+'</td><td>'+(r.xfers>0 ? r.xfers+(r.a2t>=0?" · "+dur(r.a2t):"") : "")+'</td>'+
+      '<td class="l muted">'+esc(r.tags)+'</td></tr>';
+  });
+  h += '</tbody></table>';
+  setHTML("list", h);
+  var from = CALLS.page*CALLS.size;
+  $("subList").textContent = n0(CALLS.total)+" calls"+(CALLS.total ? ", showing "+n0(from+1)+" to "+n0(Math.min(CALLS.total, from+CALLS.size)) : "")+
+    (STATIC ? " (the report keeps the newest "+CALLS.rows.length+")" : "");
+  setHTML("pager", STATIC ? "" :
+    '<button data-page="first"'+(CALLS.page===0?" disabled":"")+'>First</button><button data-page="prev"'+(CALLS.page===0?" disabled":"")+'>Previous</button>'+
+    '<span>page '+(CALLS.page+1)+' of '+CALLS.pages+'</span><button data-page="next"'+(CALLS.page>=CALLS.pages-1?" disabled":"")+'>Next</button>'+
+    '<button data-page="last"'+(CALLS.page>=CALLS.pages-1?" disabled":"")+'>Last</button>');
+}
+
+/* ---------------------------------------------------------------- call detail */
+var detailGen = 0;
+function showCall(src, key, id){
+  if(STATIC){ alert("Call detail needs the running CubeScope; this report keeps the list only."); return; }
+  $("det").innerHTML = '<div class="busy"><span class="spin"></span>reading the call and its log lines</div>';
+  $("ovl").classList.add("show");
+  /* id names this exact call: a GUID the CUBE reused hours later belongs to two */
+  var my = ++detailGen;
+  fetch("api/call?src="+src+"&id="+id+"&key="+encodeURIComponent(key)+"&raw=1"+zoneParam(), {cache:"no-store"}).then(function(r){
+    if(!r.ok) throw new Error("call not found");
+    return r.json();
+  }).then(function(d){ if(my === detailGen) renderCall(d); })
+    .catch(function(e){ if(my === detailGen) $("det").innerHTML = '<p>'+esc(e.message)+'</p><button id="detClose">Close</button>'; });
+}
+function closeCall(){ $("ovl").classList.remove("show"); }
+
+/* ---------------------------------------------------------------- alarms window
+   The settings live in the service (GET/POST api/alarms). The form is drawn once per open or save;
+   the "Last check" part refreshes every 15 s on its own so typing is never disturbed. */
+var AL = {data:null, timer:null, dirty:false};
+var AL_RESULTS = [["rejected","rejected"],["failed","failed"],["busy","busy"],["noanswer","no answer"],["abandoned","canceled while ringing"]];
+var AL_STATE = {alarm:"ALARM", ok:"ok", "too-few":"too few calls", missing:"no such CUBE"};
+function alOpen(){
+  $("alOvl").classList.add("show");
+  $("alDet").innerHTML = alHead()+'<div class="hint">reading the alarm settings...</div>';
+  fetch("api/alarms", {cache:"no-store"}).then(function(r){ return r.json(); }).then(function(d){ AL.data = d; alRender(d); })
+    .catch(function(e){ $("alDet").innerHTML = alHead()+'<p class="critt">Cannot reach CubeScope: '+esc(e.message)+'</p>'; });
+  if(AL.timer) clearInterval(AL.timer);
+  AL.timer = setInterval(alRefreshStatus, 15000);
+}
+function alClose(){
+  if(!$("alOvl").classList.contains("show")) return;
+  if(AL.dirty && !window.confirm("Close the alarm settings without saving the changes?")) return;
+  $("alOvl").classList.remove("show"); AL.dirty = false;
+  if(AL.timer){ clearInterval(AL.timer); AL.timer = null; }
+}
+function alHead(){ return '<div class="hd"><h3>Alarms</h3><span class="spacer"></span><button id="alX">Close</button></div>'; }
+function alOpt(v, cur, label){ return '<option value="'+v+'"'+(v===cur?' selected':'')+'>'+(label||v)+'</option>'; }
+/* what a rule can watch: its label, the box's hint, whether the box is unused, whether Match is unused */
+var AL_FIELD = {
+  called:["called number","DNIS, e.g. 5550200",false,false], dialed:["number as dialled","DNIS as it arrived",false,false],
+  connected:["connected number","number transferred to",false,false], anyleg:["any leg's number","DNIS or transfer target",false,false],
+  dialpeer:["dial-peer","dial-peer tag, e.g. 100",false,true], endpoint:["far-end address","e.g. 192.0.2.10",false,false],
+  cube:["every call on the CUBE","not needed",true,true]};
+function alFieldChanged(sel){
+  var tr = sel.closest("tr"), f = AL_FIELD[sel.value] || AL_FIELD.called;
+  var box = tr.querySelector('[data-al="dnis"]'), m = tr.querySelector('[data-al="match"]');
+  box.placeholder = f[1]; box.disabled = f[2]; if(f[2]) box.value = "";
+  m.disabled = f[3]; if(f[3]) m.value = "exact";
+}
+function alRuleRow(r, sources){
+  var names = sources.slice();
+  r.cubes.forEach(function(x){ if(names.indexOf(x)<0) names.push(x); });
+  var cubes = names.map(function(n){
+    return '<label class="chk"><input type="checkbox" data-al="cube" value="'+esc(n)+'"'+(r.cubes.indexOf(n)>=0?' checked':'')+'>'+esc(n)+
+           (sources.indexOf(n)<0 ? ' <span class="critt">(not in the logs)</span>' : '')+'</label>';
+  }).join("");
+  var fails = AL_RESULTS.map(function(x){
+    return '<label class="chk"><input type="checkbox" data-al="fail" value="'+x[0]+'"'+(r.failResults.indexOf(x[0])>=0?' checked':'')+'>'+x[1]+'</label>';
+  }).join("");
+  var f = AL_FIELD[r.field] || AL_FIELD.called;
+  return '<tr data-al="rule"><td><input type="checkbox" data-al="on" aria-label="Watch this"'+(r.enabled?' checked':'')+'></td>'+
+    '<td class="l"><input type="text" data-al="dnis" size="15" aria-label="Number, dial-peer or address" placeholder="'+f[1]+'"'+(f[2]?' disabled':'')+' value="'+esc(r.dnis)+'"></td>'+
+    '<td class="l"><select data-al="field" aria-label="Watch">'+Object.keys(AL_FIELD).map(function(k){ return alOpt(k, r.field, AL_FIELD[k][0]); }).join("")+'</select></td>'+
+    '<td class="l"><select data-al="match" aria-label="Match"'+(f[3]?' disabled':'')+'>'+alOpt("exact", r.match)+alOpt("suffix", r.match, "ends with")+alOpt("prefix", r.match, "starts with")+'</select></td>'+
+    '<td class="l"><div class="alcubes">'+cubes+'</div><div class="hint">none ticked: every CUBE</div></td>'+
+    '<td><input type="number" data-al="pct" aria-label="Over percent" min="0" max="100" step="0.1" value="'+r.thresholdPercent+'"></td>'+
+    '<td><input type="number" data-al="win" aria-label="Window minutes" min="5" max="1440" value="'+r.windowMinutes+'"></td>'+
+    '<td><input type="number" data-al="calls" aria-label="Minimum calls" min="1" value="'+r.minCalls+'"></td>'+
+    '<td><input type="number" data-al="fails" aria-label="Minimum failures" min="1" value="'+r.minFailures+'"></td>'+
+    '<td class="l"><div class="alcubes">'+fails+'</div><div class="hint"'+tipk("al.cancelmin")+'>canceled counts after '+
+      '<input type="number" data-al="cancelmin" aria-label="A cancel counts after this many seconds" min="0" max="600" step="0.5" value="'+(r.cancelMinSeconds||0)+'"> s</div></td>'+
+    '<td class="l"><input type="text" data-al="note" size="28" maxlength="500" aria-label="Note added to this DNIS alarm" '+
+      'placeholder="e.g. call the NOC, open a carrier ticket" value="'+esc(r.note||"")+'"></td>'+
+    '<td><button data-al="del">Remove</button></td></tr>';
+}
+function alRender(d){
+  var h = alHead();
+  AL.dirty = false;
+  if(!d.available){ $("alDet").innerHTML = h+'<p class="note">'+esc(d.why||"")+'</p>'; return; }
+  var c = d.config;
+  AL.keepLog = c.keepSyslogDays||0; AL.armed = -1;
+  h += '<p class="note">Kept by CubeScope on '+esc(d.computer)+' in '+esc(d.dataDir)+
+       (d.logFile ? ' · <a href="api/log" target="_blank" rel="noopener">View log</a>' : '')+'</p>';
+  h += '<h4'+tipk("al.rules")+'>What to watch</h4><div class="tblwrap"><table class="altbl"><thead><tr><th>On</th><th class="l">Number, dial-peer or address</th>'+
+       '<th class="l">Watch</th><th class="l">Match</th><th class="l">CUBEs</th><th>Over %</th><th>Window (min)</th><th>Min calls</th>'+
+       '<th>Min failures</th><th class="l">Counts as failed</th><th class="l"'+tipk("al.note")+'>Note on the alarm</th><th></th></tr></thead><tbody id="alRules">';
+  c.rules.forEach(function(r){ h += alRuleRow(r, d.sources); });
+  h += '</tbody></table></div><button id="alAdd">Add a rule</button>';
+  h += '<h4'+tipk("al.how")+'>How to raise it</h4><div class="algrid">'+
+    '<label class="chk"><input type="checkbox" id="alOn" aria-label="Alarms on"'+(c.enabled?' checked':'')+'><b>Alarms on</b></label>'+
+    '<label>Check every <input type="number" id="alEvery" min="1" max="60" value="'+c.intervalMinutes+'"> minutes</label>'+
+    '<label class="chk"><input type="checkbox" id="alEv" aria-label="Windows Application log"'+(c.eventLog?' checked':'')+'>Windows Application log</label>'+
+    '<label>Event source <input type="text" id="alSrc" value="'+esc(c.eventSource)+'"></label>'+
+    '<label>Alarm event level <select id="alLvl">'+alOpt("Error", c.alertLevel)+alOpt("Warning", c.alertLevel)+'</select></label>'+
+    '<label>SNMP traps to <input type="text" id="alDest" placeholder="NMS address; several with commas" value="'+esc(c.trapDestinations.join(", "))+'"></label>'+
+    '<label>Trap port <input type="number" id="alPort" min="1" max="65535" value="'+c.trapPort+'"></label>'+
+    '<label>Community <input type="text" id="alComm" value="'+esc(c.trapCommunity)+'"></label>'+
+    '<label>Trap OID <input type="text" id="alOid" value="'+esc(c.trapOid)+'"></label>'+
+    '<label'+tipk("al.stale")+'>Alarm when a CUBE sends no call records for <input type="number" id="alStale" min="0" max="1440" value="'+c.staleMinutes+'"> minutes (0 = off)</label>'+
+    '</div><div class="hint">Deleting old syslog and call record files is under <a href="#" id="alToSettings">Settings</a> (now: call record files '+
+    (c.keepDays>0 ? c.keepDays+' days' : 'kept')+', syslog files '+(c.keepSyslogDays>0 ? c.keepSyslogDays+' days' : 'kept')+').</div>';
+  h += '<div class="alacts"><button id="alSave" class="primary">Save</button><button id="alTest"'+tipk("al.test")+'>Test alarm</button>'+
+       '<span id="alMsg" role="status"></span></div>';
+  h += '<h4'+tipk("al.status")+'>Last check</h4><div id="alStatus"></div>';
+  h += '<h4'+tipk("al.history")+'>Alarm history</h4><div id="alHistory"></div>';
+  $("alDet").innerHTML = h;
+  alStatusRender(d.status);
+}
+function alStatusRender(s){
+  var el = $("alStatus"); if(!el || !s) return;
+  var h = '<div class="hint">'+(s.lastRun ? 'Last checked '+esc(s.lastRun)+' · ' : '')+esc(s.note)+(s.open ? ' · '+s.open+' open' : '')+'</div>';
+  if(s.cleanup) h += '<div class="hint">'+esc(s.cleanup)+'</div>';
+  s.problems.forEach(function(p){ h += '<div class="critt">'+esc(p)+'</div>'; });
+  if(s.checks.length){
+    h += '<div class="tblwrap"><table><thead><tr><th class="l">Watching</th><th class="l">CUBE</th><th class="l">State</th>'+
+         '<th class="l">Latest window</th><th class="l">Alarm since</th></tr></thead><tbody>';
+    s.checks.forEach(function(c){
+      h += '<tr><td class="l">'+esc(c.target||c.dnis)+'</td><td class="l">'+esc(c.cube)+'</td><td class="l"><span class="alst '+esc(c.state)+'">'+
+           esc(AL_STATE[c.state]||c.state)+'</span></td><td class="l">'+esc(c.text)+'</td><td class="l">'+
+           (c.since ? esc(new Date(c.since).toLocaleString()) : '')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  el.innerHTML = h;
+  alHistoryRender(s.history || []);
+}
+var AL_HSTATE = {alarm:"ALARM", clear:"clear", "cannot-check":"cannot check", "checking-again":"checking again", notice:"notice"};
+function alHistoryRender(list){
+  var el = $("alHistory"); if(!el) return;
+  if(!list.length){ el.innerHTML = '<div class="hint">nothing sent yet</div>'; return; }
+  var h = '<div class="hint">'+list.length+' most recent, newest first; kept in alarm-history.jsonl beside the settings</div><div class="alhist"><table><thead><tr>'+
+          '<th class="l">Time</th><th class="l">Event</th><th class="l">CUBE</th><th class="l">Watching</th><th class="l">Description</th>'+
+          '<th class="l">Event log</th><th class="l">Traps sent to</th></tr></thead><tbody>';
+  list.forEach(function(x){
+    var test = x.cube==="TEST" || x.text.indexOf("Test ")===0;
+    h += '<tr><td class="l">'+esc(x.time)+'</td><td class="l"><span class="alst '+esc(x.state)+'">'+esc((test ? "test " : "")+(AL_HSTATE[x.state]||x.state))+'</span> '+
+         x.id+'</td><td class="l">'+esc(x.cube)+'</td><td class="l">'+esc(x.dnis)+'</td><td class="l">'+esc(x.text)+'</td><td class="l'+
+         (x.eventLog.indexOf("FAILED")>=0 ? ' critt' : '')+'">'+esc(x.eventLog)+'</td><td class="l'+(x.traps.indexOf("FAILED")>=0 ? ' critt' : '')+'">'+esc(x.traps)+'</td></tr>';
+  });
+  el.innerHTML = h+'</tbody></table></div>';
+}
+function alRefreshStatus(){
+  if(!$("alOvl").classList.contains("show")) return;
+  fetch("api/alarms", {cache:"no-store"}).then(function(r){ return r.json(); }).then(function(d){ if(d.available) alStatusRender(d.status); }).catch(function(){});
+}
+function alCollect(){
+  var rules = [];
+  Array.prototype.forEach.call(document.querySelectorAll('#alRules tr[data-al="rule"]'), function(tr){
+    function q(k){ return tr.querySelector('[data-al="'+k+'"]'); }
+    function ticked(k){
+      return Array.prototype.filter.call(tr.querySelectorAll('input[data-al="'+k+'"]'), function(x){ return x.checked; }).map(function(x){ return x.value; });
+    }
+    rules.push({enabled:q("on").checked, dnis:q("dnis").value.trim(), field:q("field").value, match:q("match").value, cubes:ticked("cube"),
+      thresholdPercent:+q("pct").value, windowMinutes:+q("win").value, minCalls:+q("calls").value, minFailures:+q("fails").value, failResults:ticked("fail"),
+      note:q("note").value.trim(), cancelMinSeconds:+q("cancelmin").value});
+  });
+  return {enabled:$("alOn").checked, intervalMinutes:+$("alEvery").value, eventLog:$("alEv").checked, eventSource:$("alSrc").value.trim(),
+    alertLevel:$("alLvl").value, trapDestinations:$("alDest").value.split(",").map(function(s){ return s.trim(); }).filter(Boolean),
+    trapPort:+$("alPort").value, trapCommunity:$("alComm").value, trapOid:$("alOid").value.trim(), staleMinutes:+$("alStale").value, rules:rules};
+}
+function alPost(path, busyText){
+  var msg = $("alMsg"); msg.className = "hint"; msg.textContent = busyText;
+  fetch(path, {method:"POST", cache:"no-store", headers:{"Content-Type":"application/json", "X-CubeScope":"1"}, body:JSON.stringify(alCollect())})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+    .then(function(x){
+      if(!x.ok || !x.j.ok){ msg.className = "critt"; msg.textContent = "Not done: "+(x.j.error||x.j.why||"refused"); return; }
+      if(path==="api/alarms"){ AL.data = x.j; alRender(x.j); setTimeout(alRefreshStatus, 2500); }
+      else alStatusRender(x.j.status);
+      $("alMsg").className = "okt"; $("alMsg").textContent = x.j.text;
+    })
+    .catch(function(e){ msg.className = "critt"; msg.textContent = "Cannot reach CubeScope: "+e.message; });
+}
+$("alarmsBtn").onclick = alOpen;
+$("alOvl").addEventListener("click", function(ev){
+  var t = ev.target, act = t.getAttribute ? t.getAttribute("data-al") : null;
+  if(t.id==="alX"){ alClose(); return; }
+  if(t.id==="alAdd"){
+    $("alRules").insertAdjacentHTML("beforeend", alRuleRow({enabled:true, dnis:"", field:"called", match:"exact", cubes:[], thresholdPercent:1,
+      windowMinutes:60, minCalls:50, minFailures:2, failResults:["rejected","failed"], note:"", cancelMinSeconds:0}, AL.data.sources));
+    AL.dirty = true; return;
+  }
+  if(act==="del"){ var tr = t.closest("tr"); if(tr) tr.parentNode.removeChild(tr); AL.dirty = true; return; }
+  if(t.id==="alSave"){ alPost("api/alarms", "saving..."); return; }
+  if(t.id==="alToSettings"){ ev.preventDefault(); if(AL.dirty && !window.confirm("Leave the alarm settings without saving the changes?")) return; AL.dirty = false; alClose(); stOpen(); return; }
+  if(t.id==="alTest"){ alPost("api/alarms/test", "sending a test..."); return; }
+});
+$("alOvl").addEventListener("input", function(){ AL.dirty = true; });
+$("alOvl").addEventListener("change", function(ev){ AL.dirty = true; if(ev.target.getAttribute && ev.target.getAttribute("data-al")==="field") alFieldChanged(ev.target); });
+/* Settings: how long old files are kept (the service deletes them; it also runs the alarms), and how this
+   CubeScope was started. Only the clean-up can be changed here; the rest is set when it is installed. */
+var ST = {data:null, armed:null, dirty:false};
+function stHead(){ return '<div class="hd"><h3>Settings</h3><span class="spacer"></span><button id="stX">Close</button></div>'; }
+function stOpen(){
+  $("stOvl").classList.add("show");
+  $("stDet").innerHTML = stHead()+'<div class="hint">reading the settings...</div>';
+  fetch("api/settings", {cache:"no-store"}).then(function(r){ return r.json(); }).then(function(d){ ST.data = d; stRender(d); })
+    .catch(function(e){ $("stDet").innerHTML = stHead()+'<p class="critt">Cannot reach CubeScope: '+esc(e.message)+'</p>'; });
+}
+function stClose(){
+  if(!$("stOvl").classList.contains("show")) return;
+  if(ST.dirty && !window.confirm("Close the settings without saving the changes?")) return;
+  $("stOvl").classList.remove("show"); ST.dirty = false; ST.armed = null;
+}
+function stRow(k, v){ return '<tr><td class="l">'+esc(k)+'</td><td class="l">'+v+'</td></tr>'; }
+function stRender(d){
+  ST.dirty = false; ST.armed = null;
+  var h = stHead();
+  h += '<h4'+tipk("st.keep")+'>Delete old files</h4>';
+  if(d.cleans){
+    h += '<div class="algrid">'+
+      '<label'+tipk("al.keepLog")+'>Delete syslog files older than <input type="number" id="stKeepLog" min="0" max="3650" value="'+(d.keepSyslogDays||0)+'"> days (0 = keep them all)</label>'+
+      '<label'+tipk("al.keep")+'>Delete call record (SFTP) files older than <input type="number" id="stKeep" min="0" max="3650" value="'+(d.keepDays||0)+'"> days (0 = keep them all)</label>'+
+      '</div><div class="hint">Checked every hour, and at once when saved. Only files named the way a CUBE or the syslog server names them, in the folder CubeScope reads'+
+      (d.host && d.host.logs ? ' ('+esc(d.host.logs)+')' : '')+'. Deleted files are gone for good.</div>'+
+      (d.cleanup ? '<div class="hint">Last clean-up: '+esc(d.cleanup)+'</div>' : '')+
+      '<div class="alacts"><button id="stSave" class="primary">Save</button><span id="stMsg" role="status"></span></div>';
+  } else {
+    h += '<p class="note">This CubeScope does not delete files. The CubeScope service does (Admin, or CubeScope.exe --install-service); open its page, '+
+         'usually http://localhost:8792/, to set how long files are kept.</p>';
+  }
+  h += '<h4'+tipk("st.about")+'>This CubeScope</h4><div class="tblwrap"><table class="stabout"><tbody>';
+  h += stRow("Version", esc(d.version))+stRow("Computer", esc(d.computer))+stRow("Running as", d.service ? "the CubeScope Windows service" : "a program window");
+  if(d.user) h += stRow("Signed in as", esc(d.user));
+  h += stRow("Other computers", d.httpsPort>0 ? 'over HTTPS on port '+d.httpsPort+', for members of "'+esc(d.allowGroup)+'" and this server\'s administrators' :
+             '<span class="muted">not allowed (turn on Remote access on the Admin page)</span>');
+  var o = d.host;
+  if(o){
+    h += stRow("Reads", esc(o.logs)+(o.pattern && o.pattern!=="*.log" ? ' <span class="muted">('+esc(o.pattern)+')</span>' : ''));
+    h += stRow("Keeps in memory", o.hours>0 ? "the newest "+o.hours+" hours, read afresh every "+Math.max(1, Math.floor(o.hours/4))+" h" :
+               o.days>0 ? "the newest "+o.days+" day(s)" : "every file");
+    h += stRow("Follows new records", o.live ? "yes" : "no (started with --no-live)");
+    h += stRow("Page", "port "+o.port+(o.localOnly ? ", this computer only" : ", other computers too"));
+    h += stRow("Syslog server's zone", o.serverZone ? esc(o.serverZone) : '<span class="muted">worked out from the CUBEs\' labels</span>');
+    h += stRow("Settings and history", esc(o.dataDir));
+  }
+  if(d.cleans) h += stRow("Alarms", (d.alarmsOn ? "on" : "off")+", "+d.rules+" rule(s)"+(d.staleMinutes>0 ? ", no-records warning after "+d.staleMinutes+" min" : "")+
+                          ' · <a href="#" id="stToAlarms">Alarm settings</a>');
+  h += stRow("Troubleshooting log", d.logFile ? esc(d.logFile)+' · <a href="api/log" target="_blank" rel="noopener">View</a>' : '<span class="muted">none kept</span>');
+  h += '</tbody></table></div>';
+  if(d.cubes && d.cubes.length){
+    h += '<h4>CUBEs read</h4><div class="tblwrap"><table><thead><tr><th class="l">CUBE</th><th>Files</th><th>Legs from syslog</th><th>Legs from call record files</th><th class="l">Also logs as</th></tr></thead><tbody>';
+    d.cubes.forEach(function(c){ h += '<tr><td class="l">'+esc(c.name)+'</td><td>'+n0(c.files)+'</td><td>'+n0(c.syslogLegs)+'</td><td>'+n0(c.fileLegs)+'</td><td class="l">'+esc(c.also)+'</td></tr>'; });
+    h += '</tbody></table></div>';
+  }
+  $("stDet").innerHTML = h;
+  tipRefresh();
+}
+function stSave(){
+  var kl = +$("stKeepLog").value, kc = +$("stKeep").value, d = ST.data;
+  /* saving starts the clean-up at once and it cannot be undone, so a new or lower number takes a second press */
+  var newer = function(v, was){ return v>0 && v<=3650 && (was===0 || v<was); };
+  var key = kl+"|"+kc;
+  if((newer(kl, d.keepSyslogDays||0) || newer(kc, d.keepDays||0)) && ST.armed!==key){
+    ST.armed = key;
+    var what = [];
+    if(newer(kl, d.keepSyslogDays||0)) what.push("syslog files older than "+kl+" days");
+    if(newer(kc, d.keepDays||0)) what.push("call record files older than "+kc+" days");
+    $("stMsg").className = "critt";
+    $("stMsg").textContent = "Saving will permanently delete "+what.join(" and ")+", right away. Press Save again to go ahead.";
+    return;
+  }
+  $("stMsg").className = "hint"; $("stMsg").textContent = "saving...";
+  fetch("api/settings", {method:"POST", cache:"no-store", headers:{"Content-Type":"application/json", "X-CubeScope":"1"}, body:JSON.stringify({keepDays:kc, keepSyslogDays:kl})})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+    .then(function(x){
+      if(!x.ok || !x.j.ok){ $("stMsg").className = "critt"; $("stMsg").textContent = "Not saved: "+(x.j.error||"refused"); return; }
+      ST.data = x.j; stRender(x.j);
+      $("stMsg").className = "okt"; $("stMsg").textContent = "Saved.";
+      setTimeout(function(){ if($("stOvl").classList.contains("show")) fetch("api/settings", {cache:"no-store"}).then(function(r){ return r.json(); }).then(function(d){ if(!ST.dirty){ ST.data = d; stRender(d); } }).catch(function(){}); }, 3000);
+    })
+    .catch(function(e){ $("stMsg").className = "critt"; $("stMsg").textContent = "Cannot reach CubeScope: "+e.message; });
+}
+$("settingsBtn").onclick = stOpen;
+$("stOvl").addEventListener("click", function(ev){
+  var t = ev.target;
+  if(t.id==="stX" || t.id==="stOvl"){ stClose(); return; }
+  if(t.id==="stSave"){ stSave(); return; }
+  if(t.id==="stToAlarms"){ ev.preventDefault(); stClose(); if(!$("stOvl").classList.contains("show")) alOpen(); return; }
+});
+$("stOvl").addEventListener("input", function(){ ST.dirty = true; ST.armed = null; if($("stMsg")){ $("stMsg").className = "hint"; $("stMsg").textContent = "changed: press Save"; } });
+/* Admin: sets this server up to receive CUBE call record files over SFTP. Only a window opened as administrator
+   can change anything, and its link carries that window's key; any other CubeScope offers to open one. */
+var AD = {token:null, data:null, timer:null, reviewed:false, busy:false};
+(function(){ var m = /[?&]admin=([0-9a-z]+)/i.exec(location.search); if(m) AD.token = m[1]; })();
+function adHeaders(body){ var h = {"X-CubeScope":"1"}; if(body) h["Content-Type"] = "application/json"; if(AD.token) h["X-CubeScope-Admin"] = AD.token; return h; }
+function adHead(){ return '<div class="hd"><h3>Admin</h3><span class="spacer"></span><button id="adX">Close</button></div>'; }
+function adFetch(){ return fetch("api/admin/state", {cache:"no-store", headers:adHeaders(false)}).then(function(r){ return r.json(); }); }
+function adOpen(){
+  $("adOvl").classList.add("show");
+  $("adDet").innerHTML = adHead()+'<div class="hint">reading this server...</div>';
+  adFetch().then(function(d){ AD.data = d; adRender(d); })
+    .catch(function(e){ $("adDet").innerHTML = adHead()+'<p class="critt">Cannot reach CubeScope: '+esc(e.message)+'</p>'; });
+  if(AD.timer) clearInterval(AD.timer);
+  AD.timer = setInterval(adRefresh, 20000);
+}
+function adClose(){
+  if(!$("adOvl").classList.contains("show") || AD.busy) return;
+  $("adOvl").classList.remove("show");
+  if(AD.timer){ clearInterval(AD.timer); AD.timer = null; }
+}
+function adRender(d){
+  var h = adHead();
+  if(d.mode!=="admin"){
+    h += '<p class="note">'+esc(d.why)+'</p>';
+    if(d.canElevate) h += '<div class="alacts"><button id="adElevate" class="primary">Reopen as administrator</button><span id="adMsg" role="status"></span></div>';
+    $("adDet").innerHTML = h;
+    return;
+  }
+  var s = d.settings;
+  h += '<p class="note">'+(d.simulated ? '<b>Simulated: nothing on this computer changes.</b> ' : '')+'Sets up '+esc(d.computer)+
+       ' to receive call record files from CUBEs over SFTP. Nothing changes until you press Apply.'+
+       (d.logFile ? ' · <a href="api/log" target="_blank" rel="noopener">View log</a>' : '')+'</p>';
+  h += '<h4>Current state</h4><div id="adChecks"></div>';
+  h += '<h4>Settings</h4><div class="algrid">'+
+    '<label>SFTP port <input type="number" id="adPort" min="1" max="65535" value="'+s.port+'"></label>'+
+    '<label>Save files in <input type="text" id="adFolder" value="'+esc(s.folder)+'"></label>'+
+    '<label>Account name <input type="text" id="adAccount" maxlength="20" value="'+esc(s.account)+'"></label>'+
+    '<label>Password <input type="password" id="adPw" autocomplete="new-password" placeholder="blank keeps the current one"></label>'+
+    '<label>CUBE addresses allowed <input type="text" id="adAllowed" placeholder="one or more, separated by commas" value="'+esc(s.allowed)+'"></label>'+
+    '<label class="chk"><input type="checkbox" id="adService" aria-label="Run CubeScope as a service"'+(s.serviceInstalled?' disabled':' checked')+'>Keep CubeScope running as a service, reading these files'+(s.serviceInstalled?' (already installed)':'')+'</label>'+
+    '</div><div class="hint">Avoid spaces and question marks in the password, because the CUBE cannot take them. The service keeps the dashboard, the alarms and the cleanup running.</div>';
+  h += '<div class="alacts"><button id="adReview" class="primary">Review changes</button><button id="adApply" disabled>Apply</button><span id="adMsg" role="status"></span></div><div id="adPlan"></div>';
+  var rm = d.remote || {};
+  h += '<h4'+tipk("ad.remote")+'>Remote access (HTTPS)</h4><div id="adRemState"></div><div class="algrid">'+
+    '<label>HTTPS port <input type="number" id="adRemPort" min="1" max="65535" value="'+(rm.port||8794)+'"></label>'+
+    '<label>Certificate thumbprint <input type="text" id="adRemThumb" maxlength="60" placeholder="empty: CubeScope makes its own" value="'+esc(rm.thumbprint||"")+'"></label>'+
+    '<label>Windows group allowed in <input type="text" id="adRemGroup" maxlength="64" value="'+esc(rm.group||"CubeScope Users")+'"></label>'+
+    '<label>Add these people to it <input type="text" id="adRemPeople" placeholder="DOMAIN\\name, several with commas"></label>'+
+    '<label>Allowed from <input type="text" id="adRemAllowed" placeholder="empty: anywhere (the sign-in still applies)" value="'+esc(rm.allowed||"")+'"></label>'+
+    '</div><div class="hint">Other computers open the dashboard at the HTTPS address and sign in with their Windows account; only members of the group '+
+    '(and this server\'s administrators) get in. This page and plain HTTP stay on this server only.</div>'+
+    '<div class="alacts"><button id="adRemReview" class="primary">Review</button><button id="adRemApply" disabled>Apply</button>'+
+    '<button id="adRemOff">Turn off</button><span id="adRemMsg" role="status"></span></div><div id="adRemPlan"></div>';
+  h += '<h4>Files received</h4><div id="adFiles"></div><h4>Recent sign-ins</h4><div id="adSign"></div>';
+  h += '<h4'+tipk("ad.log")+'>Detailed SFTP logging</h4><div id="adLog"></div><div class="hint"><span id="adLogMsg" role="status"></span></div>'+
+       '<div id="adLogSteps"></div><div id="adLogFiles"></div>';
+  h += '<h4>Paste this on the CUBE</h4><div class="algrid"><label>This server\'s address <select id="adAddr">'+
+       d.addresses.map(function(a){ return '<option>'+esc(a)+'</option>'; }).join("")+'</select></label></div>'+
+       '<pre id="adCube"></pre><div class="alacts"><button id="adCopy">Copy</button></div>';
+  $("adDet").innerHTML = h;
+  AD.reviewed = false;
+  adStatus(d);
+  adCubeText();
+}
+function adStatus(d){
+  if(!$("adChecks")) return;
+  var h = '<div class="tblwrap"><table><tbody>';
+  d.checks.forEach(function(c){
+    h += '<tr><td class="l">'+esc(c.name)+'</td><td class="l"><span class="alst '+(c.ok?'ok':'missing')+'">'+(c.ok?'ok':'to do')+'</span></td><td class="l">'+esc(c.text)+'</td></tr>';
+  });
+  $("adChecks").innerHTML = h+'</tbody></table></div>';
+  if(!d.files.length) $("adFiles").innerHTML = '<div class="hint">none yet</div>';
+  else {
+    h = '<div class="tblwrap"><table><thead><tr><th class="l">File</th><th>Bytes</th><th class="l">Last changed</th></tr></thead><tbody>';
+    d.files.forEach(function(f){ h += '<tr><td class="l">'+esc(f.name)+'</td><td>'+f.size.toLocaleString()+'</td><td class="l">'+esc(f.when)+'</td></tr>'; });
+    $("adFiles").innerHTML = h+'</tbody></table></div>';
+  }
+  $("adSign").innerHTML = d.signins.length ? d.signins.map(function(x){ return '<div class="hint">'+esc(x)+'</div>'; }).join("") : '<div class="hint">none yet</div>';
+  adLogRender(d.logging);
+  adRemState(d.remote);
+}
+/* Remote access: HTTPS for other computers, with a Windows sign-in for one group */
+var AR = {reviewed:false};
+function adRemState(g){
+  var el = $("adRemState"); if(!el || !g) return;
+  var h = g.on ? '<div class="note"><b>On</b> at '+g.links.map(function(u){ return '<code>'+esc(u)+'</code>'; }).join(" or ")+
+      ' for members of "'+esc(g.group)+'"'+(g.groupExists ? '' : ' <span class="critt">(the group is missing)</span>')+
+      (g.cert ? '. Certificate: '+esc(g.cert) : '')+'.</div>'
+    : '<div class="hint">Off: CubeScope answers this server only.'+(g.service ? '' : ' Remote access needs the CubeScope service (tick it above and Apply).')+'</div>';
+  el.innerHTML = h;
+}
+function adRemCollect(action){
+  return {action:action, httpsPort:+$("adRemPort").value, thumbprint:$("adRemThumb").value.trim(), group:$("adRemGroup").value.trim(),
+          addPeople:$("adRemPeople").value.trim(), allowed:$("adRemAllowed").value.trim()};
+}
+function adRemMsg(cls, t){ var m = $("adRemMsg"); if(m){ m.className = cls; m.textContent = t; } }
+function adRemRun(action){
+  if(AD.busy) return;
+  if(action==="apply" && !AR.reviewed) return;
+  if(action==="off" && !window.confirm("Turn remote access off? People on other computers lose the dashboard until it is turned on again.")) return;
+  AD.busy = action!=="review";
+  ["adRemReview","adRemApply","adRemOff"].forEach(function(id){ if($(id)) $(id).disabled = true; });
+  adRemMsg("hint", action==="review" ? "checking this server..." : "working, this can take a minute...");
+  adPost("api/admin/remote", adRemCollect(action)).then(function(x){
+    AD.busy = false;
+    $("adRemReview").disabled = false; $("adRemOff").disabled = false;
+    if(!x.ok && !x.steps){ adRemMsg("critt", "Not done: "+(x.error||"refused")); return; }
+    adSteps(x, action!=="review", "adRemPlan");
+    if(action==="review"){
+      var can = !x.blocked.length; AR.reviewed = can; $("adRemApply").disabled = !can;
+      adRemMsg(can ? "okt" : "critt", can ? "Nothing has changed yet. Press Apply to make these changes." : "Fix the problem above, then review again.");
+    } else {
+      AR.reviewed = false; $("adRemApply").disabled = true;
+      if(action==="apply") $("adRemPeople").value = "";
+      adRemMsg(x.ok ? "okt" : "critt", x.ok ? (action==="apply" ? "Done. Remote access is on." : "Done. Remote access is off.") : "Stopped: see the step marked failed above.");
+      adRefresh();
+    }
+  }).catch(function(e){ AD.busy = false; $("adRemReview").disabled = false; $("adRemOff").disabled = false; adRemMsg("critt", "Cannot reach CubeScope: "+e.message); });
+}
+/* Detailed SFTP logging: on for a while, then off by itself (a Windows scheduled task) with the lines saved */
+function adLogRender(g){
+  if(!$("adLog") || !g) return;
+  var keep = $("adLogMin") ? $("adLogMin").value : "30", h;
+  if(g.on){
+    h = '<div class="note"><b>On</b>'+(g.until>0 ? ' until '+new Date(g.until).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})+' (this server\'s clock)' : '')+
+        '. It then turns itself off and saves the log here, even with this page closed. On the CUBE: <code>debug voip dump-file-acct</code> now, '+
+        '<code>undebug all</code> afterwards.</div>'+
+        '<div class="alacts"><button id="adLogOff" class="primary">Turn off now and save the log</button>'+
+        '<label>or keep it on for <select id="adLogMin">'+[15,30,60,120].map(function(m){ return '<option'+(String(m)===keep?' selected':'')+'>'+m+'</option>'; }).join("")+
+        '</select> minutes from now</label><button id="adLogOn">Change the end</button></div>';
+  } else {
+    h = '<div class="hint">For upload problems such as <code>%VOICE_FILE_ACCT-3-DUMPFAIL</code> on a CUBE: OpenSSH writes down every connection step and every '+
+        'file-transfer request with its size and answer, then turns itself off and saves one text file. Turning it on and off restarts OpenSSH, '+
+        'which cuts off an upload in progress; if the CUBE then writes to flash, run <code>file-acct reset</code> on it. OpenSSH never logs passwords.</div>'+
+        '<div class="alacts"><label>For <select id="adLogMin">'+[15,30,60,120].map(function(m){ return '<option'+(String(m)===keep?' selected':'')+'>'+m+'</option>'; }).join("")+
+        '</select> minutes</label><button id="adLogOn" class="primary">Turn on</button></div>';
+  }
+  if(!g.debugLog) h += '<div class="hint">This server has no OpenSSH/Debug event log, so only connections, file opens, closes and errors are kept.</div>';
+  if(!AD.busy) $("adLog").innerHTML = h;
+  var f = '';
+  if(g.files && g.files.length){
+    f = '<div class="hint">Saved in '+esc(g.folder)+' (administrators only):</div><div class="tblwrap"><table><thead><tr><th class="l">Log</th><th>Bytes</th><th class="l">Saved</th><th></th></tr></thead><tbody>';
+    g.files.forEach(function(x){ f += '<tr><td class="l">'+esc(x.name)+'</td><td>'+x.size.toLocaleString()+'</td><td class="l">'+esc(x.when)+'</td><td><button data-logfile="'+esc(x.name)+'">Download</button></td></tr>'; });
+    f += '</tbody></table></div>';
+  }
+  $("adLogFiles").innerHTML = f;
+}
+function adLogMsg(cls, text){ var m = $("adLogMsg"); if(m){ m.className = cls; m.textContent = text; } }
+function adLogging(on){
+  if(AD.busy) return;
+  AD.busy = true;
+  adLogMsg("hint", on ? "turning it on, this can take a minute..." : "turning it off and saving the log, this can take a minute...");
+  Array.prototype.forEach.call(document.querySelectorAll("#adLog button"), function(b){ b.disabled = true; });
+  adPost("api/admin/logging", {action: on ? "on" : "off", minutes: +($("adLogMin") ? $("adLogMin").value : 30)}).then(function(x){
+    AD.busy = false;
+    if(x.steps) adSteps(x, true, "adLogSteps");
+    adRefresh();
+    setTimeout(function(){ adLogMsg(x.ok ? "okt" : "critt", x.ok ? (on ? "On." : "Off, and the log is saved below.") : "Stopped: "+(x.error || (x.blocked && x.blocked[0]) || "see the step marked failed.")); }, 400);
+  }).catch(function(e){ AD.busy = false; adLogMsg("critt", "Cannot reach CubeScope: "+e.message); });
+}
+function adLogDownload(name){
+  fetch("api/admin/logging/file?name="+encodeURIComponent(name), {cache:"no-store", headers:adHeaders(false)}).then(function(r){
+    if(!r.ok) return r.text().then(function(t){ throw new Error(t); });
+    return r.blob();
+  }).then(function(b){
+    var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }).catch(function(e){ adLogMsg("critt", "Not downloaded: "+e.message); });
+}
+function adRefresh(){
+  if(!$("adOvl").classList.contains("show") || AD.busy || !AD.data || AD.data.mode!=="admin") return;
+  adFetch().then(function(d){ AD.data = d; adStatus(d); }).catch(function(){});
+}
+function adCollect(){
+  return {port:+$("adPort").value, folder:$("adFolder").value, account:$("adAccount").value, password:$("adPw").value, allowed:$("adAllowed").value, service:$("adService").checked};
+}
+function adCubeText(){
+  var el = $("adCube"); if(!el) return;
+  var port = $("adPort").value.trim();
+  el.textContent = "! The CUBE needs a master key first: key config-key password-encrypt, then password encryption aes\n"+
+    "! It also needs: ip ssh source-interface <its inside interface>\n"+
+    "conf t\n gw-accounting file\n  primary sftp "+$("adAddr").value+(port==="22" ? "" : ":"+port)+"/cdr username "+$("adAccount").value.trim().toLowerCase()+" password <password>\n"+
+    "  secondary ifs flash:cdr\n  maximum retry-count 3\n  maximum cdrflush-timer 5\n  maximum fileclose-timer 60\n  cdr-format detailed\n  acct-template callhistory-detail\n  end\nfile-acct reset\n"+
+    "! Keep gw-accounting syslog on too: CubeScope fills any gaps in the files from it.\n";
+}
+var AD_STEP = {done:["ok","done"], skipped:["too-few","already done"], failed:["alarm","failed"], "not-run":["too-few","not run"]};
+function adSteps(x, applied, target){
+  var h = '';
+  x.blocked.forEach(function(b){ h += '<div class="critt">'+esc(b)+'</div>'; });
+  x.notes.forEach(function(n){ h += '<div class="hint">'+esc(n)+'</div>'; });
+  h += '<div class="tblwrap"><table><tbody>';
+  x.steps.forEach(function(s){
+    var st = applied && s.status ? AD_STEP[s.status] : (s.needed ? ["missing","will do"] : ["too-few","already done"]);
+    h += '<tr><td class="l"><span class="alst '+st[0]+'">'+st[1]+'</span></td><td class="l">'+esc(s.text)+(s.detail ? '<div class="'+(s.status==="failed"?'critt':'muted')+'">'+esc(s.detail)+'</div>' : '')+'</td></tr>';
+  });
+  $(target || "adPlan").innerHTML = h+'</tbody></table></div>';
+}
+function adMsg(cls, text){ var m = $("adMsg"); if(m){ m.className = cls; m.textContent = text; } }
+function adPost(path, body){
+  return fetch(path, {method:"POST", cache:"no-store", headers:adHeaders(true), body:JSON.stringify(body)})
+    .then(function(r){ return r.text().then(function(t){ try { return JSON.parse(t); } catch(e){ return {ok:false, error:t}; } }); });
+}
+function adReview(){
+  adMsg("hint", "checking this server...");
+  $("adApply").disabled = true; AD.reviewed = false;
+  adPost("api/admin/review", adCollect()).then(function(x){
+    if(!x.ok){ $("adPlan").innerHTML = ''; adMsg("critt", "Not done: "+x.error); return; }
+    adSteps(x, false);
+    var can = !x.blocked.length;
+    $("adApply").disabled = !can; AD.reviewed = can;
+    adMsg(can ? "okt" : "critt", can ? "Nothing has changed yet. Press Apply to make these changes." : "Fix the problem above, then review again.");
+  }).catch(function(e){ adMsg("critt", "Cannot reach CubeScope: "+e.message); });
+}
+function adApply(){
+  if(!AD.reviewed || AD.busy) return;
+  AD.busy = true; AD.reviewed = false;
+  $("adApply").disabled = true; $("adReview").disabled = true;
+  adMsg("hint", "working, this can take a minute...");
+  adPost("api/admin/apply", adCollect()).then(function(x){
+    AD.busy = false; $("adReview").disabled = false;
+    if(x.steps) adSteps(x, true);
+    $("adPw").value = "";
+    adMsg(x.ok ? "okt" : "critt", x.ok ? "Done. The receiver is ready." : "Stopped: "+(x.error || "see the step marked failed above."));
+    adRefresh();
+  }).catch(function(e){ AD.busy = false; $("adReview").disabled = false; adMsg("critt", "Cannot reach CubeScope: "+e.message); });
+}
+$("adminBtn").onclick = adOpen;
+$("adOvl").addEventListener("click", function(ev){
+  var id = ev.target.id;
+  if(id==="adX"){ adClose(); return; }
+  if(id==="adReview"){ adReview(); return; }
+  if(id==="adApply"){ adApply(); return; }
+  if(id==="adCopy"){ try { navigator.clipboard.writeText($("adCube").textContent); ev.target.textContent = "Copied"; } catch(e){} return; }
+  if(id==="adRemReview"){ adRemRun("review"); return; }
+  if(id==="adRemApply"){ adRemRun("apply"); return; }
+  if(id==="adRemOff"){ adRemRun("off"); return; }
+  if(id==="adLogOn"){ adLogging(true); return; }
+  if(id==="adLogOff"){ adLogging(false); return; }
+  var lf = ev.target.getAttribute && ev.target.getAttribute("data-logfile");
+  if(lf){ adLogDownload(lf); return; }
+  if(id==="adElevate"){
+    adMsg("hint", "approve the Windows prompt; a new window and page will open...");
+    adPost("api/admin/elevate", {}).then(function(x){ if(!x.ok) adMsg("critt", x.error); }).catch(function(e){ adMsg("critt", e.message); });
+  }
+});
+function adEdited(ev){
+  if(ev.target.id==="adAddr" || ev.target.id==="adPort" || ev.target.id==="adAccount") adCubeText();
+  if(ev.target.id && ev.target.id.indexOf("adRem")===0){ AR.reviewed = false; if($("adRemApply")) $("adRemApply").disabled = true; return; }
+  if(ev.target.id!=="adAddr" && ev.target.id!=="adLogMin" && $("adApply")){ $("adApply").disabled = true; AD.reviewed = false; if(!AD.busy) adMsg("hint", "changed: review again before applying"); }
+}
+$("adOvl").addEventListener("input", adEdited);
+$("adOvl").addEventListener("change", adEdited);
+if(AD.token) adOpen();
+function renderCall(d){
+  var c = d.call, legs = d.legs.slice().sort(function(a, b){ return a.setup-b.setup; });
+  var rel = d.releaseLeg>=0 ? d.legs[d.releaseLeg] : null;
+  var h = '<div class="hd"><h3>'+esc(c.calling||"(no calling number)")+' &rarr; '+esc(c.called||"?")+(c.connected?' &rarr; '+esc(c.connected):'')+'</h3>'+
+          '<span class="pill r-'+c.result+'">'+esc(d.resultLabel)+'</span><span class="spacer"></span><button id="detClose">Close</button></div>';
+  h += '<div class="meta">GUID '+esc(c.key)+(d.padded && d.padded!==c.key ? ' · padded '+esc(d.padded) : '')+(d.short ? ' · trace id '+esc(d.short) : '')+' · '+esc(d.source)+'</div>';
+  h += '<div class="facts">'+
+    fact("Start", fmtDMs(c.start)+" "+esc(d.tz)+(d.tz ? "" : " (the CUBE's clock)"))+
+    (d.zoneStart!==undefined ? fact("Start, page's clock", fmtDMs(d.zoneStart)+" "+esc(d.zoneLabel)) : "")+fact("Duration", dur(c.dur))+fact("Ring", c.ring>=0?dur(c.ring):"-")+fact("Talk", dur(c.talk))+
+    fact("Released by", esc(c.rel)+(rel ? " · "+esc(rel.dir)+" leg "+esc(rel.legId)+" "+esc(rel.peer||rel.cdn||"") : ""))+
+    fact("Deciding cause", c.cause>=0 ? c.cause+" "+esc(c.causeName) : "-")+
+    fact("Media", esc(MEDIA_LABEL[c.media]||"not judged")+(c.bpp ? " · "+c.bpp+" bytes/packet" : ""))+
+    fact("Transfers", c.xfers>0 ? c.xfers+(c.a2t>=0 ? " · answer to transfer "+dur(c.a2t) : "") : "none")+
+    fact("Dialled", esc(c.dialed||"-"))+fact("Tags", esc(c.tags||"-"))+
+    fact("Data", feedTags(c.feeds||0))+fact("Dial-peers", dialPeers(legs, c.feeds||0))+'</div>';
+  if(d.same) h += sameNumber(d.same);
+  if(c.dialer) h += '<div class="note">The first inbound leg has no calling number: the dialer. Its leg carries no media, and the customer leg counts packets only from the transfer.</div>';
+  h += '<h4'+tipk("leg.timeline")+'>Timeline</h4><div class="cwrap"><canvas id="cLegs"></canvas></div>';
+  h += '<h4'+tipk("panel.detail")+'>Legs</h4><div class="tblwrap"><table><thead><tr><th class="l">Leg</th><th class="l"'+tipk("leg.dir")+'>Dir</th>'+
+       '<th class="l">Setup</th><th class="l">Answer</th><th class="l">Disconnect</th><th>Ring</th><th>Talk</th><th class="l">Peer</th><th'+tipk("leg.peer")+'>Dial-peer</th><th class="l">Calling</th>'+
+       '<th class="l">Called</th><th class="l">Cause</th><th class="l"'+tipk("leg.packets")+'>Packets tx / rx</th><th class="l">Media</th><th class="l">Notes</th></tr></thead><tbody>';
+  legs.forEach(function(g){
+    var notes = [];
+    if(g.i===d.releaseLeg) notes.push("ended first");
+    if(g.away) notes.push("transferred away");
+    if(g.signal) notes.push("signalling only");
+    if(g.stub) notes.push("history line lost");
+    if(!g.bound && !g.stub) notes.push("TWC record lost");
+    h += '<tr class="'+(g.i===d.releaseLeg?"rel":"")+(g.away?" away":"")+'"><td class="l">'+esc(g.legId||"-")+'</td><td class="l">'+esc(g.dir)+'</td>'+
+      '<td class="l">'+fmtMs(g.setup)+'</td><td class="l">'+(g.answered?fmtMs(g.connect):'<span class="muted">no answer</span>')+'</td><td class="l">'+fmtMs(g.disc)+'</td>'+
+      '<td>'+(g.ring>=0?dur(g.ring):"")+'</td><td>'+(g.talk>0?dur(g.talk):"")+'</td><td class="l num">'+esc(g.peer)+'</td>'+
+      '<td>'+(g.d && g.d.dialPeer>=0 ? g.d.dialPeer : '<span class="muted">-</span>')+'</td><td class="l num">'+esc(g.cgn)+'</td>'+
+      '<td class="l num">'+esc(g.cdn)+'</td><td class="l">'+(g.stub?"":g.cause+(g.causeName ? ' <span class="muted">'+esc(g.causeName)+'</span>' : ''))+'</td>'+
+      '<td class="l">'+(g.stub?"":n0(g.txp)+" / "+n0(g.rxp)+(g.bpp?" ("+g.bpp+" B)":""))+'</td>'+
+      '<td class="l m-'+g.media+'">'+esc(MEDIA_LABEL[g.media]||"")+'</td><td class="l muted">'+esc(notes.join(", "))+'</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  var fromCdr = legs.filter(function(g){ return g.d; });
+  if(fromCdr.length){
+    h += '<h4'+tipk("leg.cdr")+'>From the CUBE\'s call record</h4><div class="tblwrap"><table><thead><tr><th class="l">Leg</th><th class="l">Dir</th><th>Dial-peer</th><th class="l">Codec</th><th class="l">Far-end media</th>'+
+         '<th>To ringing</th><th class="l">Called: received / sent</th><th class="l">Calling: received / sent</th>'+
+         '<th class="l">Signalling</th><th class="l">Disconnect, in the CUBE\'s words</th></tr></thead><tbody>';
+    fromCdr.forEach(function(g){
+      var x = g.d, two = function(a, b){ return esc(a||"-")+(b && b!==a ? ' <span class="muted">/</span> '+esc(b) : ''); };
+      var proto = colVal(g, "session-protocol"), sport = colVal(g, "remote-udp-port");
+      h += '<tr><td class="l">'+esc(g.legId||"-")+'</td><td class="l">'+esc(g.dir)+'</td><td>'+(x.dialPeer>=0 ? x.dialPeer : "")+'</td><td class="l">'+esc(x.codec)+'</td>'+
+           '<td class="l num">'+esc(x.mediaIp)+(x.mediaPort ? ':'+x.mediaPort : '')+'</td><td>'+(x.alertMs>=0 ? dur(x.alertMs) : "")+'</td>'+
+           '<td class="l num">'+two(x.rxCalled, x.sentCalled)+'</td><td class="l num">'+two(x.rxCalling, x.sentCalling)+'</td>'+
+           '<td class="l">'+esc(proto)+(sport ? ' <span class="muted">port '+esc(sport)+'</span>' : '')+'</td><td class="l">'+esc(colVal(g, "disconnect-text"))+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    var named = fromCdr.filter(function(g){ return g.cols; });
+    if(named.length){
+      h += '<details><summary>Every column, by Cisco\'s name</summary>';
+      named.forEach(function(g){
+        var r = ''; for(var i=0;i+1<g.cols.length;i+=2) r += '<tr><td class="l">'+esc(g.cols[i])+'</td><td class="l num">'+esc(g.cols[i+1])+'</td></tr>';
+        h += '<div class="hint">Leg '+esc(g.legId||"-")+' ('+esc(g.dir)+')</div><div class="tblwrap"><table><tbody>'+r+'</tbody></table></div>';
+      });
+      h += '</details>';
+    }
+  }
+  var measured = legs.filter(function(g){ return g.q; });
+  if(measured.length){
+    h += '<h4>Call quality, as the CUBE measured it</h4><div class="tblwrap"><table><thead><tr><th class="l">Leg</th><th class="l">Dir</th><th>MOS</th><th>Packet loss</th>'+
+         '<th>Out of order</th><th>Lost</th><th>Late</th><th>Early</th><th>Jitter</th><th>Round trip</th><th>Receive delay</th><th>ICPIF</th></tr></thead><tbody>';
+    measured.forEach(function(g){
+      var q = g.q;
+      h += '<tr><td class="l">'+esc(g.legId||"-")+'</td><td class="l">'+esc(g.dir)+'</td><td>'+q.mos.toFixed(2)+'</td><td>'+q.loss.toFixed(2)+' %</td><td>'+q.ooo.toFixed(2)+' %</td><td>'+
+           n0(q.lost)+'</td><td>'+n0(q.late)+'</td><td>'+n0(q.early)+'</td><td>'+(q.jitter>0 ? q.jitter.toFixed(4) : '')+'</td><td>'+n0(q.rtt)+' ms</td><td>'+n0(q.delay)+' ms</td><td>'+n0(q.icpif)+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  if(d.features.length){
+    h += '<h4>Features</h4><pre>'+d.features.map(function(f){
+      var kv = []; for(var i=0;i+1<f.kv.length;i+=2) kv.push(f.kv[i]+"="+f.kv[i+1]);
+      return esc(fmtMs(f.ft)+"  "+f.fn+"  leg "+f.legId+"  "+kv.join(" "));
+    }).join("\n")+'</pre>';
+  }
+  if(d.errors.length){
+    h += '<h4>Internal errors</h4><pre>'+d.errors.map(function(e){ return esc(fmtMs(e.t)+"  "+e.sub+": "+e.text+"  IEC="+e.code+"  callID "+e.callId+"  ("+e.file+":"+e.line+")"); }).join("\n")+'</pre>';
+  }
+  d.dumps.forEach(function(x){
+    h += '<details><summary>Failure trace at '+fmtMs(x.t)+(x.utc?" UTC":"")+' · '+esc(x.cause)+' · '+x.lines+' lines'+(x.truncated?" (cut short)":"")+'</summary><pre>'+esc(x.text)+'</pre></details>';
+  });
+  if(d.raw && d.raw.length){
+    h += '<h4>Raw log lines <button id="copyRaw">Copy</button></h4><pre id="rawLines">'+esc(d.raw.join("\n"))+'</pre>';
+  }
+  $("det").innerHTML = h;
+  legTimeline(d, legs);
+  tipRefresh();
+}
+function fact(k, v){ return '<div><b>'+esc(k)+'</b>'+v+'</div>'; }
+/* a call record column by Cisco's name, from the columns read back for the detail ("12 disconnect-text", value, ...) */
+function colVal(g, name){
+  if(!g.cols) return "";
+  for(var i=0;i+1<g.cols.length;i+=2){ var k = g.cols[i], sp = k.indexOf(" "); if(k.substring(sp+1)===name) return g.cols[i+1]; }
+  return "";
+}
+/* each leg's dial-peer in setup order: in 5 -> out 10 */
+function dialPeers(legs, feeds){
+  var p = [];
+  legs.forEach(function(g){ if(g.d && g.d.dialPeer>=0) p.push(esc(g.dir)+" "+g.d.dialPeer); });
+  if(p.length) return p.join(" &rarr; ");
+  return '<span class="muted">'+((feeds & 2) ? "none in the call record" : "not sent by syslog: the call record files carry it")+'</span>';
+}
+function sameNumber(s){
+  var other = [];
+  ["answered","noanswer","busy","abandoned","rejected","failed","unknown"].forEach(function(k){
+    var n = s.byResult[k]; if(n) other.push((RES_LABEL[k]||k)+" "+n0(n));
+  });
+  return '<div class="note samebar"'+tipk("call.same")+'><b>Calls to '+esc(s.number)+'</b>'+
+    '<span>'+n0(s.calls)+' loaded, '+fmtDT(Math.floor(s.from/1000))+' to '+fmtDT(Math.floor(s.to/1000))+'</span>'+
+    '<span class="'+(s.failed>0?'critt':'')+'"><b>'+pct(s.failed, s.calls)+' failed</b> ('+n0(s.failed)+')</span>'+
+    '<span>'+pct(s.answered, s.calls)+' answered</span><span class="muted">'+esc(other.join(" · "))+'</span>'+
+    (s.cubes>1 && s.thisCube<s.calls ? '<span>on this CUBE '+pct(s.thisCubeFailed, s.thisCube)+' of '+n0(s.thisCube)+' failed</span>' : '')+
+    '<button data-same="'+esc(s.number)+'">List them</button></div>';
+}
+function legTimeline(d, legs){
+  var cv = $("cLegs"); if(!cv) return;
+  var rowH = 20, padL = 150, padR = 12, padT = 6;
+  var p = prep(cv, legs.length*rowH + padT + 20), g = p.g, w = p.w, h = p.h;
+  var t0 = d.call.start, t1 = Math.max(t0+1, d.call.start + d.call.dur), iw = w-padL-padR;
+  function X(t){ return padL + iw*(t-t0)/(t1-t0); }
+  g.font = "11px "+css("--mono"); g.textBaseline = "middle";
+  legs.forEach(function(lg, r){
+    var y = padT + r*rowH;
+    g.fillStyle = css("--ink2"); g.textAlign = "right";
+    g.fillText(lg.dir+" "+(lg.peer||lg.cdn||lg.legId||""), padL-8, y+rowH/2);
+    var c = lg.away ? css("--other") : (lg.dir==="in" ? col(0) : col(2));
+    if(!lg.stub){
+      var xs = X(lg.setup), xc = X(lg.answered ? lg.connect : lg.disc), xd = X(lg.disc);
+      g.globalAlpha = 0.3; g.fillStyle = c; g.fillRect(xs, y+4, Math.max(1, xc-xs), rowH-8);
+      g.globalAlpha = 1;
+      if(lg.answered){ g.fillStyle = c; g.fillRect(xc, y+4, Math.max(1, xd-xc), rowH-8); }
+      if(lg.i===d.releaseLeg){ g.strokeStyle = css("--crit"); g.lineWidth = 2; g.strokeRect(xs-1, y+3, Math.max(2, xd-xs)+2, rowH-6); }
+    } else { g.fillStyle = css("--ink3"); g.fillRect(X(lg.setup)-1, y+4, 2, rowH-8); }
+  });
+  d.features.forEach(function(f){
+    if(f.fn!=="BXFER") return;
+    var x = X(f.ft); g.strokeStyle = css("--ink"); g.setLineDash([3,3]); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(x, padT); g.lineTo(x, padT + legs.length*rowH); g.stroke(); g.setLineDash([]);
+  });
+  g.fillStyle = css("--ink3"); g.textAlign = "left"; g.textBaseline = "top";
+  g.fillText(fmtMs(t0), padL, h-14); g.textAlign = "right"; g.fillText(fmtMs(t1)+" "+d.tz, w-padR, h-14);
+}
+
+/* ---------------------------------------------------------------- clocks */
+function renderClock(){
+  var c = S.clock;
+  if(!c){ setHTML("clock", ""); return; }
+  $("subClock").textContent = "Syslog server's zone: "+c.serverText;
+  var h = '<table><thead><tr><th class="l">CUBE</th><th class="l">Zone labels on its messages</th><th class="l">Against the server</th>'+
+          '<th class="l">Its clock reads</th><th class="l">Its label says</th><th class="l">Clock error</th></tr></thead><tbody>';
+  c.cubes.forEach(function(k){
+    var m = k.measured;
+    h += '<tr><td class="l">'+esc(k.name)+'</td><td class="l">'+(k.labels ? esc(k.labels) : '<span class="muted">nothing yet</span>')+'</td>'+
+         '<td class="l">'+(m ? esc(k.zoneWords) : '<span class="muted">-</span>')+'</td>'+
+         '<td class="l">'+(m ? esc(k.clockUtc) : '<span class="muted">-</span>')+'</td>'+
+         '<td class="l">'+(m && k.labelUtc ? esc(k.labelUtc) : '<span class="muted">no label</span>')+'</td>'+
+         '<td class="l'+(m && k.errorBad ? ' critt' : '')+'">'+(m ? esc(k.errorText) : '<span class="muted">-</span>')+'</td></tr>';
+    k.notes.forEach(function(n){ h += '<tr><td></td><td class="l muted" colspan="5">'+esc(n)+'</td></tr>'; });
+    if(k.segments.length > 1){
+      if(k.segmentsOmitted) h += '<tr><td></td><td class="l muted" colspan="5">'+n0(k.segmentsOmitted)+' earlier changes not listed</td></tr>';
+      k.segments.forEach(function(g){
+        h += '<tr><td></td><td class="l muted" colspan="5">from '+fmtDT(g.from)+' (server clock): '+esc(g.zoneWords)+', clock error '+esc(g.errorText)+
+             (g.tz ? ', labels '+esc(g.tz) : '')+', '+n0(g.files)+' file'+(g.files===1?'':'s')+'</td></tr>';
+      });
+    }
+  });
+  setHTML("clock", h + '</tbody></table>');
+}
+
+/* ---------------------------------------------------------------- health */
+function renderHealth(){
+  var h = '<table><thead><tr><th class="l">CUBE</th><th>Files</th><th>Lines</th><th>Legs</th><th>Without TWC</th><th>TWC only</th><th>Duplicates</th>'+
+          '<th>Messages missing</th><th>Lines not used</th><th>Failure traces</th><th>Internal errors</th><th class="l">Newest record</th><th class="l">Status</th></tr></thead><tbody>';
+  S.health.forEach(function(s){
+    var two = s.fileLegs>0 && s.syslogLegs>0;
+    h += '<tr><td class="l">'+esc(s.name)+(s.also?'<div class="muted"'+tipk("hl.also")+'>syslog arrives as '+esc(s.also)+'</div>':'')+
+         (two?'<div class="muted"'+tipk("hl.two")+'>in both feeds '+n0(s.inBoth)+' · syslog only '+n0(s.syslogLegs-s.inBoth)+' · files only '+n0(s.fileLegs-s.inBoth)+'</div>':'')+
+         '</td><td>'+n0(s.filesRead)+'</td><td>'+n0(s.lines)+'</td><td>'+n0(s.legs)+'</td><td>'+n0(s.unbound)+'</td><td>'+n0(s.stubs)+
+         '</td><td>'+n0(s.dupLegs)+'</td><td>'+n0(s.iosMissing)+(s.iosGaps?' <span class="muted">in '+n0(s.iosGaps)+'</span>':'')+'</td><td>'+n0(s.skipped)+'</td><td>'+n0(s.dumps)+'</td><td>'+n0(s.iecs)+
+         '</td><td class="l">'+(s.last>0?fmtDT(s.last):"-")+'</td><td class="l muted">'+esc(s.status)+' · '+esc(s.lastFile)+'</td></tr>';
+    s.warnings.forEach(function(w){ h += '<tr><td></td><td class="l muted" colspan="12">'+esc(w)+'</td></tr>'; });
+  });
+  setHTML("health", h + '</tbody></table>');
+  var r = S.rules;
+  setHTML("rulesNote", 'Number rules: '+esc(r.path)+' · tags '+esc(r.tags.join(", "))+
+    (r.errors.length ? ' · <span class="ferr">'+esc(r.errors.join("; "))+'</span>' : '') +
+    (STATIC ? '' : ' · <a href="api/rules" target="_blank">show</a>'));
+}
+
+/* ---------------------------------------------------------------- find pickers
+   The filter text stays the one source of truth: each picker owns the clauses of its fields,
+   rewrites them when changed, and is set back from the text whenever the page is drawn. */
+function fTokens(text){
+  var out = [], cur = "", q = false;
+  for(var i=0;i<text.length;i++){
+    var ch = text.charAt(i);
+    if(ch==='"'){ q = !q; cur += ch; continue; }
+    if(!q && /\s/.test(ch)){ if(cur){ out.push(cur); cur = ""; } continue; }
+    cur += ch;
+  }
+  if(cur) out.push(cur);
+  return out;
+}
+/* {neg, field, op, value} the way the server reads a clause; field "any" when there is no operator */
+function fClause(tok){
+  var neg = tok.charAt(0)==="!", t = neg ? tok.substring(1) : tok, ops = ["!=",">=","<=","=",">","<",":"];
+  for(var k=0;k<t.length;k++){
+    if(t.charAt(k)==='"') break;
+    for(var o=0;o<ops.length;o++){
+      if(t.substr(k, ops[o].length)===ops[o]){
+        if(k===0) return {neg:neg, field:"any", op:"=", value:t};
+        var f = t.substring(0, k).toLowerCase(); if(f==="audio") f = "media";
+        return {neg:neg, field:f, op:ops[o]===":" ? "=" : ops[o], value:t.substring(k+ops[o].length).replace(/"/g, "")};
+      }
+    }
+  }
+  return {neg:neg, field:"any", op:"=", value:t};
+}
+function hasClause(clause){
+  var want = fClause(clause);
+  return fTokens(view.filter).some(function(t){
+    var c = fClause(t); return !c.neg && c.field===want.field && c.op===want.op && c.value.toLowerCase()===want.value.toLowerCase();
+  });
+}
+/* replaces every clause on these fields with this one (nothing: just removes them) */
+function setClause(fields, clause){
+  var fs = fields.map(function(f){ return f==="audio" ? "media" : f; });
+  var keep = fTokens(view.filter).filter(function(t){ return fs.indexOf(fClause(t).field)<0; });
+  if(clause) keep.push(clause);
+  view.filter = keep.join(" "); view.page = 0;
+  $("filter").value = view.filter;
+  load();
+}
+/* the clause on these fields if the picker can show it, "" when there is none, null when it cannot */
+function pickerValue(fields, allowOps){
+  var found = fTokens(view.filter).filter(function(t){ return fields.indexOf(fClause(t).field)>=0; });
+  if(!found.length) return {v:"", tok:null};
+  if(found.length>1) return {v:null, tok:found.join(" ")};
+  var c = fClause(found[0]);
+  if(c.neg || (allowOps||["="]).indexOf(c.op)<0 || c.value.indexOf(",")>=0) return {v:null, tok:found[0]};
+  return {v:c.value.toLowerCase(), c:c, tok:found[0]};
+}
+function fillPicker(id, opts, cur){
+  var sel = $(id), h = "", have = false;
+  opts.forEach(function(o){
+    if(o[0]===cur.v) have = true;
+    h += '<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>';
+  });
+  if(cur.v===null) h += '<option value="__custom">as typed: '+esc(cur.tok)+'</option>';
+  else if(!have) h += '<option value="'+esc(cur.v)+'">'+esc(cur.v)+(id==="fCause" ? " (none in range)" : "")+'</option>';
+  sel.innerHTML = h;
+  sel.value = cur.v===null ? "__custom" : cur.v;
+  sel.classList.toggle("set", cur.v!=="");
+}
+function cnt(n){ return n ? " · "+n0(n) : " · 0"; }
+var CANCEL_WORDS = {callercanceled:"caller hung up while ringing", dialercanceled:"dialer gave up while ringing"};
+/* the filter's other spellings of a result word, as the Result picker lists it */
+function resWord(v){
+  return {canceled:"abandoned", cancelled:"abandoned", callercancelled:"callercanceled", dialercancelled:"dialercanceled", notanswered:"unanswered"}[v] || v;
+}
+function renderFind(){
+  if(STATIC || !S.choices) return;
+  var ch = S.choices, md = ch.media, rs = ch.result, rl = ch.released;
+  /* order of the server's arrays: media unknown twoway lowrate oneway none; result unknown answered
+     abandoned noanswer busy rejected failed; released unknown caller called network tie */
+  var cs = pickerValue(["cause","legcause"]), rv = pickerValue(["result"]);
+  if(rv.v) rv.v = resWord(rv.v);
+  var on = cs.c ? cs.c.field : $("fCauseOn").value;
+  $("fCauseOn").value = on;
+  var list = on==="legcause" ? ch.legCauses : ch.causes;
+  var dc = ch.dialerCanceled||0, cc = rs[2] - dc;
+  /* canceled while ringing is a result, not a cause code (it is 16 like a normal hang-up), but it is
+     where people look for it: these two set the result clause, and show when it is the filter's */
+  if(cs.v==="" && CANCEL_WORDS[rv.v]) cs = {v:rv.v, tok:rv.tok};
+  var copts = [["", "any"], ["callercanceled", CANCEL_WORDS.callercanceled+cnt(cc)], ["dialercanceled", CANCEL_WORDS.dialercanceled+cnt(dc)]].concat(
+    list.filter(function(c){ return c.cause>=0; }).map(function(c){ return [String(c.cause), c.cause+" "+c.name+cnt(c.calls)]; }));
+  fillPicker("fCause", copts, cs);
+  fillPicker("fMedia", [["", "any"], ["problem", "any problem"+cnt(md[4]+md[3]+md[2])], ["bad", "no or one-way"+cnt(md[4]+md[3])],
+    ["none", "no media"+cnt(md[4])], ["oneway", "one-way"+cnt(md[3])], ["lowrate", "low packet rate"+cnt(md[2])],
+    ["twoway", "two-way"+cnt(md[1])]], pickerValue(["media"]));
+  fillPicker("fResult", [["", "any"], ["unanswered", "not answered"+cnt(ch.calls-rs[1])], ["answered", "answered"+cnt(rs[1])],
+    ["abandoned", "canceled while ringing"+cnt(rs[2])], ["callercanceled", "\u00a0\u00a0"+CANCEL_WORDS.callercanceled+cnt(cc)],
+    ["dialercanceled", "\u00a0\u00a0"+CANCEL_WORDS.dialercanceled+cnt(dc)], ["noanswer", "no answer"+cnt(rs[3])], ["busy", "busy"+cnt(rs[4])],
+    ["rejected", "rejected"+cnt(rs[5])], ["failed", "failed"+cnt(rs[6])]], rv);
+  fillPicker("fRel", [["", "any"], ["caller", "caller"+cnt(rl[1])], ["called", "called"+cnt(rl[2])], ["network", "network"+cnt(rl[3])],
+    ["tie", "both at once"+cnt(rl[4])]], pickerValue(["released"]));
+  var tk = pickerValue(["talk"], ["<",">=","<=",">"]);
+  if(tk.c) tk.v = "talk"+tk.c.op+tk.c.value;
+  fillPicker("fTalk", [["", "any"], ["talk<5", "under 5 s"], ["talk<10", "under 10 s"], ["talk<30", "under 30 s"],
+    ["talk>=300", "5 min or more"], ["talk>=1800", "30 min or more"]], tk);
+  var peers = (ch.dialPeers||[]).slice().sort(function(a, b){ return (+a.v)-(+b.v); });
+  $("gDialPeer").style.display = peers.length ? "" : "none";
+  if(peers.length) fillPicker("fDialPeer", [["", "any"]].concat(peers.map(function(x){ return [x.v, x.v+cnt(x.calls)]; })), pickerValue(["dialpeer"]));
+  var cods = (ch.codecs||[]).slice().sort(function(a, b){ return b.calls-a.calls; });
+  $("gCodec").style.display = cods.length ? "" : "none";
+  if(cods.length) fillPicker("fCodec", [["", "any"]].concat(cods.map(function(x){ return [x.v.toLowerCase(), x.v+cnt(x.calls)]; })), pickerValue(["codec"]));
+}
+$("fDialPeer").onchange = function(){ if(this.value==="__custom") return; setClause(["dialpeer"], this.value ? "dialpeer="+this.value : ""); };
+$("fCodec").onchange = function(){ if(this.value==="__custom") return; setClause(["codec"], this.value ? "codec="+this.value : ""); };
+$("fCause").onchange = function(){
+  if(this.value==="__custom") return;
+  if(CANCEL_WORDS[this.value]){ setClause(["cause","legcause","result"], "result="+this.value); return; }
+  /* leaving one of the two canceled entries takes its result clause away too */
+  var rv = pickerValue(["result"]), fields = ["cause","legcause"];
+  if(rv.v && CANCEL_WORDS[resWord(rv.v)]) fields.push("result");
+  setClause(fields, this.value ? $("fCauseOn").value+"="+this.value : "");
+};
+$("fCauseOn").onchange = function(){
+  var v = $("fCause").value;
+  if(v && v!=="__custom" && !CANCEL_WORDS[v]) setClause(["cause","legcause"], this.value+"="+v); else renderFind();
+};
+$("fMedia").onchange = function(){ if(this.value==="__custom") return; setClause(["media"], this.value ? "media="+this.value : ""); };
+$("fResult").onchange = function(){ if(this.value==="__custom") return; setClause(["result"], this.value ? "result="+this.value : ""); };
+$("fRel").onchange = function(){ if(this.value==="__custom") return; setClause(["released"], this.value ? "released="+this.value : ""); };
+$("fTalk").onchange = function(){ if(this.value==="__custom") return; setClause(["talk"], this.value); };
+function tileClick(el){
+  var fc = el.getAttribute("data-fc"), ff = el.getAttribute("data-ff").split(",");
+  setClause(ff, hasClause(fc) ? "" : fc);       /* a second click on the same tile drops it again */
+}
+
+/* ---------------------------------------------------------------- wiring */
+function save(){ try { localStorage.setItem("cs-view", JSON.stringify({bucket:view.bucket, sort:view.sort, desc:view.desc, zone:view.zone})); } catch(e){} }
+function addFilter(field, n){
+  var clause = field+'="'+n+'"';
+  var f = view.filter.trim();
+  if(f.indexOf(clause)>=0) return;
+  view.filter = (f ? f+" " : "")+clause; view.page = 0;
+  load();
+}
+document.addEventListener("click", function(ev){
+  var el = ev.target;
+  var tl = el.closest ? el.closest(".tile[data-fc]") : null;
+  if(tl && !STATIC){ tileClick(tl); return; }
+  var nb = el.closest ? el.closest(".nb") : null;
+  if(nb){ ev.stopPropagation(); if(!STATIC) addFilter(nb.getAttribute("data-f"), nb.getAttribute("data-n")); return; }
+  var lg = el.closest ? el.closest(".legend span") : null;
+  if(lg){ var k = lg.getAttribute("data-chart")+"|"+lg.getAttribute("data-label"); hidden[k] = !hidden[k]; renderCharts(); return; }
+  var rel = el.getAttribute && el.getAttribute("data-rel");
+  if(rel){ view.rel = rel; view.from = view.to = null; view.page = 0; zoomStack = []; load(); return; }
+  var th = el.closest ? el.closest("th.sort") : null;
+  if(th && !STATIC){
+    var s = th.getAttribute("data-sort");
+    if(view.sort===s) view.desc = !view.desc; else { view.sort = s; view.desc = (s==="start"||s==="dur"||s==="talk"||s==="ring"||s==="legs"||s==="a2t"); }
+    view.page = 0; save(); loadList(); return;
+  }
+  var pg = el.getAttribute && el.getAttribute("data-page");
+  if(pg && CALLS){
+    var p = view.page;
+    if(pg==="first") p = 0; else if(pg==="prev") p = Math.max(0, p-1); else if(pg==="next") p = Math.min(CALLS.pages-1, p+1); else p = CALLS.pages-1;
+    view.page = p; loadList(); return;
+  }
+  var cw = el.closest ? el.closest("[data-cw]") : null;
+  if(cw && !STATIC){ cancelFilter(cw.getAttribute("data-cw"), +cw.getAttribute("data-clo"), +cw.getAttribute("data-chi")); return; }
+  var cr = el.closest ? el.closest("tr[data-cause]") : null;
+  if(cr && !STATIC){ var c = cr.getAttribute("data-cause"); if(c>=0) setClause(["cause","legcause"], "cause="+c); return; }
+  var row = el.closest ? el.closest("tr[data-key]") : null;
+  if(row){ showCall(row.getAttribute("data-src"), row.getAttribute("data-key"), row.getAttribute("data-id")); return; }
+  if(el.id==="detClose" || el.id==="ovl"){ closeCall(); return; }
+  var sn = el.getAttribute && el.getAttribute("data-same");
+  if(sn && !STATIC){ closeCall(); view.filter = 'called="'+sn+'"'; view.page = 0; load(); return; }
+  if(el.id==="copyRaw"){ try { navigator.clipboard.writeText($("rawLines").textContent); el.textContent = "Copied"; } catch(e){} return; }
+});
+document.addEventListener("keydown", function(ev){
+  if(ev.key==="Escape"){ if($("adOvl").classList.contains("show")) adClose(); else if($("stOvl").classList.contains("show")) stClose(); else if($("alOvl").classList.contains("show")) alClose(); else closeCall(); }
+  if(ev.key==="Enter" && ev.target.matches && ev.target.matches("tr[data-key]")) showCall(ev.target.getAttribute("data-src"), ev.target.getAttribute("data-key"), ev.target.getAttribute("data-id"));
+  if(ev.key==="Enter" && ev.target.matches && ev.target.matches(".legend span")) ev.target.click();
+  if((ev.key==="Enter" || ev.key===" ") && ev.target.matches && ev.target.matches(".cnum[data-cw]")){ ev.preventDefault(); ev.target.click(); }
+  if((ev.key==="Enter" || ev.key===" ") && ev.target.matches && ev.target.matches(".tile[data-fc]")){ ev.preventDefault(); tileClick(ev.target); }
+});
+$("applyRange").onclick = function(){
+  var f = parseInput($("from").value), t = parseInput($("to").value);
+  if(f===null || t===null || t<=f){ $("ferr").textContent = "the range needs a start before its end"; return; }
+  zoomStack.push({rel:view.rel, from:view.from, to:view.to});
+  view.from = f; view.to = t; view.rel = null; view.page = 0; load();
+};
+$("bucket").onchange = function(){ view.bucket = this.value; save(); load(); };
+/* a typed or zoomed range keeps its numbers: they are read on the newly picked clock */
+$("zone").onchange = function(){ view.zone = this.value; view.page = 0; save(); load(); };
+$("src").onchange = function(){ view.src = this.value; view.page = 0; load(); };
+$("applyFilter").onclick = function(){ view.filter = $("filter").value.trim(); view.page = 0; load(); };
+$("filter").addEventListener("keydown", function(ev){ if(ev.key==="Enter"){ view.filter = this.value.trim(); view.page = 0; load(); } });
+$("clearFilter").onclick = function(){ view.filter = ""; $("filter").value = ""; view.page = 0; load(); };
+
+/* Recent filters: the last 15 that applied without an error, newest first, in this browser only */
+var recentF = [];
+try { recentF = JSON.parse(localStorage.getItem("cs-filters")||"[]"); } catch(e){}
+if(!Array.isArray(recentF)) recentF = [];
+recentF = recentF.filter(function(f){ return typeof f==="string" && f; }).slice(0, 15);
+function drawRecentF(){
+  setHTML("recentF", '<option value="">Recent filters</option>' +
+    recentF.map(function(f, i){ return '<option value="'+i+'">'+esc(f)+'</option>'; }).join("") +
+    (recentF.length ? '<option value="forget">Forget these</option>' : ''));
+  $("recentF").disabled = !recentF.length;
+  setHTML("filterList", recentF.map(function(f){ return '<option value="'+esc(f)+'">'; }).join(""));
+}
+var seenF = null;   // the filter the last answer applied: Live re-reads must not undo "Forget these"
+function rememberFilter(f){
+  if(f===seenF) return;
+  seenF = f;
+  if(!f || recentF[0]===f) return;
+  recentF = [f].concat(recentF.filter(function(x){ return x!==f; })).slice(0, 15);
+  try { localStorage.setItem("cs-filters", JSON.stringify(recentF)); } catch(e){}
+  drawRecentF();
+}
+$("recentF").onchange = function(){
+  var v = this.value;
+  this.value = "";
+  if(v==="forget"){ recentF = []; try { localStorage.removeItem("cs-filters"); } catch(e){} drawRecentF(); return; }
+  var f = recentF[+v];
+  if(!f) return;
+  view.filter = f; $("filter").value = f; view.page = 0; load();
+};
+drawRecentF();
+$("live").onclick = function(){
+  view.live = !liveOn();
+  try { localStorage.setItem("cs-live", view.live ? "on" : "off"); } catch(e){}
+  schedule(); if(S){ renderControls(); renderHeader(); }
+  if(view.live) load(true);           /* catch up at once rather than five seconds later */
+};
+$("back").onclick = function(){
+  var z = zoomStack.pop(); if(!z) return;
+  view.rel = z.rel; view.from = z.from; view.to = z.to; view.page = 0;
+  load();
+};
+$("theme").onclick = function(){
+  var r = document.documentElement, cur = r.getAttribute("data-theme");
+  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var next = cur ? (cur==="dark" ? "light" : "dark") : (dark ? "light" : "dark");
+  r.setAttribute("data-theme", next);
+  try { localStorage.setItem("cs-theme", next); } catch(e){}
+  redrawAll();
+};
+try { var lv = localStorage.getItem("cs-live"); if(lv==="on" || lv==="off") view.live = lv==="on"; } catch(e){}
+try { var th = localStorage.getItem("cs-theme"); if(th) document.documentElement.setAttribute("data-theme", th); } catch(e){}
+try { var sv = JSON.parse(localStorage.getItem("cs-view")||"null"); if(sv){ view.bucket = sv.bucket||"auto"; view.sort = sv.sort||"start"; view.desc = sv.desc!==false; view.zone = sv.zone||"cube"; } } catch(e){}
+function redrawAll(){ if(!S) return; _pal = {}; renderAll(); if(CALLS) renderList(); }
+var resizeT = null;
+window.addEventListener("resize", function(){ clearTimeout(resizeT); resizeT = setTimeout(redrawAll, 120); });
+setInterval(function(){
+  if(STATIC || !lastOk || !liveOn()) return;
+  $("dot").className = Date.now()-lastOk > 20000 ? "dot stale" : "dot";
+}, 2000);
+tipInit();
+if(STATIC){
+  document.body.classList.add("static");
+  S = STATIC.state; CALLS = STATIC.calls;
+  document.title = STATIC.title || "CubeScope report";
+  $("staticNote").textContent = (STATIC.title||"CubeScope report")+" · "+fmtDT(S.range.from)+" to "+fmtDT(S.range.to)+" "+tz()+
+    (S.filter.text ? " · filter: "+S.filter.text : "")+" · a saved copy: charts and tables as they were, call detail needs the running tool.";
+  view.filter = S.filter.text || "";
+  renderAll(); renderList();
+} else {
+  load(); schedule();
+}
+</script>
+</body>
+</html>
