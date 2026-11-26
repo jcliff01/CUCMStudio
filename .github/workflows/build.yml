@@ -1,0 +1,47 @@
+name: Build and self-test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with the Windows C# compiler and run the self-test
+        shell: cmd
+        run: build.bat test
+      - name: Upload CubeScope.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: CubeScope
+          path: bin/CubeScope.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  # Every change merged to main is published as the "latest" release, so anyone can download
+  # CubeScope.exe from the Releases page without signing in to GitHub.
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: CubeScope
+      - name: Publish the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest CubeScope.exe --target "$GITHUB_SHA" --latest \
+            --title "CubeScope (latest build)" \
+            --notes "Built from ${GITHUB_SHA::7} on Windows; the built-in self-test passed. Download CubeScope.exe. The manual is in the CUBEScape repository."
