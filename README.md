@@ -6,6 +6,8 @@
 
 The program here is CubeScope: it turns the call records a Cisco CUBE writes into a dashboard in your web browser. It runs on Windows only.
 
+![CubeScope's dashboard for a made-up day of calls](docs/screenshot.png)
+
 ## Download
 
 Open the **[latest release](https://github.com/jcliff01/CUCMStudio/releases/latest)** and download **CubeScope.exe** (a release appears after the next change is merged). Or get it, with its manual, from [CUBEScape's releases](https://github.com/jcliff01/CUBEScape/releases/latest).
